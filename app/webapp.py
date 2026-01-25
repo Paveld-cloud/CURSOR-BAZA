@@ -8,7 +8,7 @@ from aiohttp import web
 import pandas as pd
 
 import app.data as data
-from app.config import PAGE_SIZE, MAX_QTY, SPREADSHEET_URL
+from app.config import MAX_QTY, SPREADSHEET_URL
 
 logger = logging.getLogger("bot.webapp")
 
@@ -28,37 +28,46 @@ async def page_item(request: web.Request):
 
 # ---------- Helpers ----------
 def _pick_image_raw(row: dict) -> str:
-    # основной вариант: колонка "image"
-    for k in ("image", "Image", "IMAGE", "img", "photo", "фото", "картинка"):
+    """
+    Максимально "живучий" поиск картинки:
+    1) точные ключи (image/img/photo/фото/картинка)
+    2) любой ключ, где подстрока похожа на image/img/photo/фото/картин
+    """
+    if not isinstance(row, dict):
+        return ""
+
+    # 1) точные
+    exact = ("image", "img", "photo", "фото", "картинка", "picture")
+    for k in exact:
         v = row.get(k)
-        if v is None:
-            continue
-        v = str(v).strip()
-        if v:
-            return v
+        if v is not None and str(v).strip():
+            return str(v).strip()
+
+    # 2) по подстроке (учитываем пробелы, регистр)
+    for k, v in row.items():
+        kk = str(k).strip().lower()
+        if any(s in kk for s in ("image", "img", "photo", "фото", "картин", "picture")):
+            if v is not None and str(v).strip():
+                return str(v).strip()
+
     return ""
 
 
 async def _resolve_image_url(row: dict) -> str:
-    """
-    Возвращает прямую ссылку для <img src="...">.
-    Если в таблице уже лежит https://... то отдадим как есть,
-    иначе попробуем через data.resolve_image_url_async(...)
-    """
     raw = _pick_image_raw(row)
     if not raw:
         return ""
 
-    # если ссылка уже выглядит как URL — отдаём сразу
+    # если уже URL
     if raw.startswith("http://") or raw.startswith("https://"):
-        # при желании всё равно можно резолвить, но это замедляет
         try:
+            # если у тебя бывают "не прямые" ссылки - резолвим
             resolved = await data.resolve_image_url_async(raw)
             return resolved or raw
         except Exception:
             return raw
 
-    # если хранишь не URL, а что-то ещё (имя/ключ) — пробуем резолв
+    # если хранишь ключ/имя - пробуем резолв
     try:
         resolved = await data.resolve_image_url_async(raw)
         return resolved or ""
@@ -74,10 +83,6 @@ def _ensure_df_ready():
 
 
 def _search_df(q: str) -> pd.DataFrame:
-    """
-    Повторяем логику поиска из handlers.py (упрощённо, но совместимо).
-    Возвращает DataFrame результатов, отсортированный по релевантности.
-    """
     _ensure_df_ready()
     df_ = data.df
 
@@ -89,16 +94,16 @@ def _search_df(q: str) -> pd.DataFrame:
     q_squash = data.squash(q)
     norm_code = data._norm_code(q)
 
-    # 1) индексный поиск
+    # 1) индексный
     if norm_code:
         matched = data.match_row_by_index([norm_code])
     else:
         matched = data.match_row_by_index(tokens)
 
-    # 2) fallback: AND внутри поля, OR по полям
+    # 2) fallback AND/OR
     if not matched:
         mask_any = pd.Series(False, index=df_.index)
-        for col in ["тип", "наименование", "код", "oem", "изготовитель"]:
+        for col in ["тип", "наименование", "код", "oem", "изготовитель", "парт номер", "oem парт номер"]:
             series = data._safe_col(df_, col)
             if series is None:
                 continue
@@ -109,10 +114,10 @@ def _search_df(q: str) -> pd.DataFrame:
             mask_any |= field_mask
         matched = set(df_.index[mask_any])
 
-    # 3) фразовый squash
+    # 3) squash
     if not matched and q_squash:
         mask_any = pd.Series(False, index=df_.index)
-        for col in ["тип", "наименование", "код", "oem", "изготовитель"]:
+        for col in ["тип", "наименование", "код", "oem", "изготовитель", "парт номер", "oem парт номер"]:
             series = data._safe_col(df_, col)
             if series is None:
                 continue
@@ -149,18 +154,6 @@ def _search_df(q: str) -> pd.DataFrame:
     return results_df.drop(columns="__score")
 
 
-def _row_to_public_dict(row: dict) -> dict:
-    """
-    Нормализуем выход под фронт.
-    Оставляем исходные поля + добавим image_url.
-    """
-    out = dict(row)
-
-    # гарантируем ключи в нижнем регистре для код/и т.п. не делаем,
-    # потому что у тебя фронт читает русские ключи как есть.
-    return out
-
-
 # ---------- API ----------
 async def api_health(request: web.Request):
     return web.json_response({"ok": True, "service": "BAZA MG Mini App", "path": "/app"})
@@ -173,7 +166,6 @@ async def api_search(request: web.Request):
 
         df_res = await asyncio.to_thread(_search_df, q)
 
-        # ограничим выдачу (по умолчанию PAGE_SIZE*3, чтобы не грузить UI)
         limit = int(request.query.get("limit") or 30)
         limit = max(1, min(limit, 100))
 
@@ -182,25 +174,23 @@ async def api_search(request: web.Request):
             for _, r in df_res.head(limit).iterrows():
                 row = r.to_dict()
 
-                # ВАЖНО: вытаскиваем image_url из колонки image
+                image_url = ""
                 try:
                     image_url = await _resolve_image_url(row)
                 except Exception:
                     image_url = ""
 
-                row_public = _row_to_public_dict(row)
-                row_public["image_url"] = image_url  # <-- фронт увидит и покажет фото
+                # для отладки: если нет картинки, логируем какие ключи есть
+                if not image_url:
+                    code = str(row.get("код", "")).strip()
+                    keys = list(row.keys())
+                    logger.info(f"[webapp] no image_url for code={code}. keys={keys}")
 
-                items.append(row_public)
+                row["image_url"] = image_url
+                items.append(row)
 
         return web.json_response(
-            {
-                "ok": True,
-                "q": q,
-                "user_id": user_id,
-                "count": len(items),
-                "items": items,
-            }
+            {"ok": True, "q": q, "user_id": user_id, "count": len(items), "items": items}
         )
 
     except Exception as e:
@@ -209,9 +199,6 @@ async def api_search(request: web.Request):
 
 
 async def api_item(request: web.Request):
-    """
-    Данные для страницы /app/item?code=...
-    """
     try:
         code = (request.query.get("code") or "").strip().lower()
         if not code:
@@ -229,12 +216,10 @@ async def api_item(request: web.Request):
         if not found:
             return web.json_response({"ok": False, "error": "not found"}, status=404)
 
-        image_url = await _resolve_image_url(found)
-        found_public = _row_to_public_dict(found)
-        found_public["image_url"] = image_url
-        found_public["card_html"] = data.format_row(found)  # удобно для pre на странице
+        found["image_url"] = await _resolve_image_url(found)
+        found["card_html"] = data.format_row(found)
 
-        return web.json_response({"ok": True, "item": found_public})
+        return web.json_response({"ok": True, "item": found})
 
     except Exception as e:
         logger.exception("api_item failed")
@@ -242,12 +227,9 @@ async def api_item(request: web.Request):
 
 
 async def api_issue(request: web.Request):
-    """
-    POST /api/issue {user_id, name, code, qty, comment}
-    Пишем в лист История (как в handlers.py).
-    """
     try:
         payload = await request.json()
+
         user_id = int(payload.get("user_id") or 0)
         name = str(payload.get("name") or "").strip()
         code = str(payload.get("code") or "").strip().lower()
@@ -263,23 +245,20 @@ async def api_issue(request: web.Request):
                 raise ValueError
             qty = float(f"{qty:.3f}")
         except Exception:
-            return web.json_response(
-                {"ok": False, "error": f"qty must be >0 and <= {MAX_QTY}"},
-                status=400,
-            )
+            return web.json_response({"ok": False, "error": f"qty must be >0 and <= {MAX_QTY}"}, status=400)
 
-        # найдём строку
         _ensure_df_ready()
         df_ = data.df
+
         part = None
         if "код" in df_.columns:
             hit = df_[df_["код"].astype(str).str.lower() == code]
             if not hit.empty:
                 part = hit.iloc[0].to_dict()
+
         if not part:
             return web.json_response({"ok": False, "error": "part not found"}, status=404)
 
-        # запись в Google Sheet
         import gspread
 
         client = data.get_gs_client()
@@ -288,9 +267,7 @@ async def api_issue(request: web.Request):
             ws = sh.worksheet("История")
         except gspread.WorksheetNotFound:
             ws = sh.add_worksheet(title="История", rows=1000, cols=12)
-            ws.append_row(
-                ["Дата", "ID", "Имя", "Тип", "Наименование", "Код", "Количество", "Коментарий"]
-            )
+            ws.append_row(["Дата", "ID", "Имя", "Тип", "Наименование", "Код", "Количество", "Коментарий"])
 
         headers_raw = ws.row_values(1)
         headers = [h.strip() for h in headers_raw]
@@ -309,9 +286,7 @@ async def api_issue(request: web.Request):
             "тип": str(part.get("тип", "")),
             "type": str(part.get("тип", "")),
             "наименование": str(part.get("наименование", "")),
-            "name_item": str(part.get("наименование", "")),
             "код": str(part.get("код", "")),
-            "code": str(part.get("код", "")),
             "количество": str(qty),
             "qty": str(qty),
             "коментарий": comment or "",
@@ -331,16 +306,6 @@ async def api_issue(request: web.Request):
 
 # ---------- App builder ----------
 def build_web_app() -> web.Application:
-    """
-    Mini App mounted at /app
-    API endpoints:
-      GET  /api/search
-      GET  /api/item
-      POST /api/issue
-    Static:
-      /static/*   (для твоего index.html)
-      /app/static/* (на всякий случай)
-    """
     app = web.Application()
 
     # Pages
@@ -354,9 +319,10 @@ def build_web_app() -> web.Application:
     app.router.add_get("/api/item", api_item)
     app.router.add_post("/api/issue", api_issue)
 
-    # Static (две точки монтирования, чтобы не было 404)
+    # Static (оба пути, чтобы не ловить 404)
     app.router.add_static("/static/", str(STATIC_DIR), show_index=False)
     app.router.add_static("/app/static/", str(STATIC_DIR), show_index=False)
 
     logger.info("Mini App mounted at /app (static: /static/* and /app/static/*)")
     return app
+
