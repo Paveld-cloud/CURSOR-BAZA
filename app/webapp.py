@@ -85,5 +85,3 @@ def build_web_app():
         return send_from_directory(STATIC_DIR, path)
 
     return app
-
-
