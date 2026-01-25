@@ -1,8 +1,8 @@
 import asyncio
 import logging
-import os
 import re
 from pathlib import Path
+
 from aiohttp import web
 import pandas as pd
 
@@ -12,10 +12,22 @@ logger = logging.getLogger("webapp")
 
 
 # ----------------------------
+# Paths (ВАЖНО под твою структуру)
+# app/
+#   web/
+#     index.html
+#     item.html
+#     static/
+#       app.js, item.js, style.css
+# ----------------------------
+WEB_DIR = Path(__file__).resolve().parent / "web"
+STATIC_DIR = WEB_DIR / "static"
+
+
+# ----------------------------
 # helpers
 # ----------------------------
 def _basename_no_query(url: str) -> str:
-    """Берём имя файла из URL без query/fragment."""
     u = str(url or "").strip()
     if not u:
         return ""
@@ -23,54 +35,44 @@ def _basename_no_query(url: str) -> str:
     return u.rsplit("/", 1)[-1]
 
 def _code_in_filename_strict(code: str, image_url: str) -> bool:
-    """
-    ЖЁСТКОЕ правило:
-    Фото считается валидным только если код присутствует в ИМЕНИ ФАЙЛА ссылки image.
-    Пример: .../UZ000664.jpg  -> OK
-            .../something.jpg -> NO
-    """
     code_u = str(code or "").strip().upper()
     if not code_u:
         return False
-    name = _basename_no_query(image_url).upper()
-    return code_u in name
+    fname = _basename_no_query(image_url).upper()
+    return code_u in fname
 
-def _safe_str(x) -> str:
+def _s(x) -> str:
     return str(x or "").strip()
 
 def _row_to_item(row: dict) -> dict:
-    """
-    Приведение строки df к объекту для WebApp.
-    Колонки в data.df у тебя в lowercase (код, наименование, ...).
-    """
-    code = _safe_str(row.get("код", "")).upper()
-    img_raw = _safe_str(row.get("image", ""))
+    code = _s(row.get("код", "")).upper()
+    img_raw = _s(row.get("image", ""))
 
-    # Строгое правило по имени файла
+    # ЖЁСТКОЕ ПРАВИЛО: фото только если код в имени файла ссылки
     image = img_raw if (img_raw and _code_in_filename_strict(code, img_raw)) else ""
 
     return {
         "code": code,
-        "name": _safe_str(row.get("наименование", "")),
-        "type": _safe_str(row.get("тип", "")),
-        "part": _safe_str(row.get("парт номер", "")),
-        "oem_part": _safe_str(row.get("oem парт номер", "")),
-        "qty": _safe_str(row.get("количество", "")),
-        "price": _safe_str(row.get("цена", "")),
-        "currency": _safe_str(row.get("валюта", "")),
-        "oem": _safe_str(row.get("oem", "")),
+        "name": _s(row.get("наименование", "")),
+        "type": _s(row.get("тип", "")),
+        "part": _s(row.get("парт номер", "")),
+        "oem_part": _s(row.get("oem парт номер", "")),
+        "qty": _s(row.get("количество", "")),
+        "price": _s(row.get("цена", "")),
+        "currency": _s(row.get("валюта", "")),
+        "oem": _s(row.get("oem", "")),
         "image": image,
     }
 
 
 async def _ensure_df():
-    # df уже загружается у тебя в main.py, но на всякий случай
-    if data.df is None:
+    # У тебя df грузится штатно (видно по логам), но на всякий случай
+    if getattr(data, "df", None) is None:
         await asyncio.to_thread(data.ensure_fresh_data, True)
 
 
 # ----------------------------
-# API handlers
+# API
 # ----------------------------
 async def api_search(request: web.Request):
     q = (request.query.get("q") or "").strip()
@@ -82,18 +84,20 @@ async def api_search(request: web.Request):
     if df_ is None or df_.empty:
         return web.json_response([])
 
-    # ---- Поисковая стратегия (как в боте, но для WebApp) ----
     tokens = data.normalize(q).split()
     q_squash = data.squash(q)
     norm_code = data._norm_code(q)
 
-    # 1) индекс
-    if norm_code:
-        matched = data.match_row_by_index([norm_code])
-    else:
-        matched = data.match_row_by_index(tokens)
+    matched = set()
 
-    # 2) фолбэк AND по токенам внутри поля, OR по полям
+    # 1) через индексы (быстро)
+    try:
+        keys = [norm_code] if norm_code else tokens
+        matched = set(data.match_row_by_index(keys))
+    except Exception:
+        matched = set()
+
+    # 2) фолбэк AND по токенам
     if not matched:
         mask_any = pd.Series(False, index=df_.index)
         for col in ["тип", "наименование", "код", "oem", "изготовитель", "парт номер", "oem парт номер"]:
@@ -107,7 +111,7 @@ async def api_search(request: web.Request):
             mask_any |= field_mask
         matched = set(df_.index[mask_any])
 
-    # 3) фолбэк по склеенной фразе
+    # 3) фолбэк по склеенной строке
     if not matched and q_squash:
         mask_any = pd.Series(False, index=df_.index)
         for col in ["тип", "наименование", "код", "oem", "изготовитель", "парт номер", "oem парт номер"]:
@@ -121,7 +125,6 @@ async def api_search(request: web.Request):
     if not matched:
         return web.json_response([])
 
-    # Сбор результатов
     results_df = df_.loc[list(matched)].copy()
 
     # сортировка по релевантности (как в боте)
@@ -137,10 +140,7 @@ async def api_search(request: web.Request):
 
     results_df = results_df.drop(columns="__score", errors="ignore")
 
-    out = []
-    for _, r in results_df.iterrows():
-        out.append(_row_to_item(r.to_dict()))
-
+    out = [_row_to_item(r.to_dict()) for _, r in results_df.iterrows()]
     return web.json_response(out)
 
 
@@ -158,31 +158,37 @@ async def api_item(request: web.Request):
     if hit.empty:
         return web.json_response({"error": "not_found"}, status=404)
 
-    row = hit.iloc[0].to_dict()
-    return web.json_response(_row_to_item(row))
+    return web.json_response(_row_to_item(hit.iloc[0].to_dict()))
 
 
 # ----------------------------
-# Static / pages
+# Pages / static
 # ----------------------------
-def _static_dir() -> Path:
-    # твоя структура: app/web/static/...
-    return Path(__file__).resolve().parent / "web" / "static"
-
 async def page_app(request: web.Request):
-    return web.FileResponse(_static_dir() / "index.html")
+    p = WEB_DIR / "index.html"
+    if not p.exists():
+        logger.error("Missing index.html at %s", p)
+        return web.Response(status=404, text="index.html not found")
+    return web.FileResponse(p)
 
 async def page_item(request: web.Request):
-    return web.FileResponse(_static_dir() / "item.html")
+    p = WEB_DIR / "item.html"
+    if not p.exists():
+        logger.error("Missing item.html at %s", p)
+        return web.Response(status=404, text="item.html not found")
+    return web.FileResponse(p)
 
 async def static_file(request: web.Request):
     rel = request.match_info.get("path", "")
-    p = (_static_dir() / rel).resolve()
+    p = (STATIC_DIR / rel).resolve()
+
     # защита от выхода из директории
-    if not str(p).startswith(str(_static_dir().resolve())):
+    if not str(p).startswith(str(STATIC_DIR.resolve())):
         return web.Response(status=403)
+
     if not p.exists() or not p.is_file():
         return web.Response(status=404)
+
     return web.FileResponse(p)
 
 
@@ -192,14 +198,11 @@ async def static_file(request: web.Request):
 def build_web_app() -> web.Application:
     app = web.Application()
 
-    # pages
     app.router.add_get("/app", page_app)
     app.router.add_get("/item", page_item)
 
-    # static
     app.router.add_get("/static/{path:.*}", static_file)
 
-    # api
     app.router.add_get("/api/search", api_search)
     app.router.add_get("/api/item", api_item)
 
