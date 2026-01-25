@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>БАЗА MG</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="h1">🏭 БАЗА MG</div>
+      <div class="sub">GM / UzAuto • Поиск деталей</div>
+    </div>
+
+    <div class="card">
+      <input id="q" class="input" placeholder="Поиск: код / парт № / OEM / наименование" />
+      <button id="btn" class="btn">Искать</button>
+      <div id="st" class="status"></div>
+    </div>
+
+    <div id="list" class="list"></div>
+  </div>
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
