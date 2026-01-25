@@ -11,10 +11,12 @@ const clearBtn = document.getElementById("clear");
 const st = document.getElementById("st");
 const list = document.getElementById("list");
 const cnt = document.getElementById("cnt");
+const statusPill = document.getElementById("statusPill");
 
 function userId() {
   return tg?.initDataUnsafe?.user?.id || 0;
 }
+
 function userName() {
   const u = tg?.initDataUnsafe?.user;
   if (!u) return "";
@@ -22,6 +24,7 @@ function userName() {
   const ln = (u.last_name || "").trim();
   return (fn + " " + ln).trim() || (u.username ? "@" + u.username : "");
 }
+
 function esc(s) {
   return String(s ?? "")
     .replaceAll("&", "&amp;")
@@ -33,6 +36,7 @@ function setErr(text) {
   st.classList.add("err");
   st.textContent = text || "";
 }
+
 function setOk(text) {
   st.classList.remove("err");
   st.textContent = text || "";
@@ -70,8 +74,8 @@ function renderItem(it) {
   const price = it["цена"] ?? "";
   const cur = it["валюта"] ?? "";
 
-  // webapp.py должен отдавать image_url
-  const image = it.image_url || it.image || it["image_url"] || "";
+  // ВАЖНО: webapp.py должен отдавать image_url (или хотя бы image)
+  const image = it.image_url || it.image || it["image_url"] || it["image"] || "";
 
   const partNo = pickPartNo(it);
   const oem = pickOem(it);
@@ -86,25 +90,25 @@ function renderItem(it) {
         </div>
       `
           : `
-        <div class="imgWrap">
-          <div class="badge">без фото</div>
+        <div class="imgWrap noImg">
+          <div class="noImgText">без фото</div>
         </div>
       `
       }
 
       <div class="cardBody">
         <div class="badges">
-          <div class="badge">Код: ${esc(codeRaw)}</div>
-          <div class="badge">Остаток: ${esc(qty)}</div>
+          <div class="badge code"><span>Код</span>${esc(codeRaw)}</div>
+          <div class="badge qty"><span>Остаток</span>${esc(qty)}</div>
         </div>
 
         <div class="title">${esc(name)}</div>
 
         <div class="meta">
-          Тип: ${esc(type)}<br/>
-          Part №: ${esc(partNo)}<br/>
-          OEM: ${esc(oem)}<br/>
-          Цена: ${esc(price)} ${esc(cur)}
+          <div><b>Тип:</b> ${esc(type)}</div>
+          <div><b>Part №:</b> ${esc(partNo)}</div>
+          <div><b>OEM:</b> ${esc(oem)}</div>
+          <div><b>Цена:</b> ${esc(price)} ${esc(cur)}</div>
         </div>
       </div>
 
@@ -151,6 +155,7 @@ async function doSearch() {
   }
 
   const { res, out } = pack;
+
   if (!res.ok || !out || !out.ok) {
     setErr(out?.error || `Ошибка поиска (${res.status})`);
     return;
@@ -161,16 +166,15 @@ async function doSearch() {
   cnt.textContent = items.length ? `Найдено: ${items.length}` : "";
 
   if (!items.length) {
-    list.innerHTML = `<div class="panel">Ничего не найдено</div>`;
+    list.innerHTML = `<div class="empty">Ничего не найдено</div>`;
     return;
   }
 
-  // Рендер
   for (const it of items) {
     list.insertAdjacentHTML("beforeend", renderItem(it));
   }
 
-  // Описание
+  // Описание (ВАЖНО: правильный путь /app/item)
   document.querySelectorAll("[data-info]").forEach((b) => {
     b.addEventListener("click", () => {
       const code = b.getAttribute("data-info");
@@ -197,9 +201,9 @@ async function doSearch() {
         comment,
       };
 
-      let pack;
+      let pack2;
       try {
-        pack = await fetchJson("/api/issue", {
+        pack2 = await fetchJson("/api/issue", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -209,7 +213,7 @@ async function doSearch() {
         return;
       }
 
-      const { res, out } = pack;
+      const { res, out } = pack2;
       if (!res.ok || !out || !out.ok) {
         alert(out?.error || `Ошибка списания (${res.status})`);
         return;
@@ -232,12 +236,8 @@ clearBtn?.addEventListener("click", () => {
   setOk("");
 });
 
-// если мини-апп открыт внутри Telegram — можно подсветить тему
+// статус сверху (косметика)
 try {
-  if (tg?.colorScheme === "dark") {
-    document.documentElement.classList.add("tg-dark");
-  }
-} catch (e) {
-  // ignore
-}
+  if (statusPill) statusPill.textContent = "Online";
+} catch (e) {}
 
