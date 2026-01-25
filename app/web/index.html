@@ -2,27 +2,54 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>БАЗА MG</title>
-  <link rel="stylesheet" href="static/style.css" />
+  <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <div class="wrap">
-    <div class="top">
-      <div class="h1">🏭 БАЗА MG</div>
-      <div class="sub">GM / UzAuto • Поиск деталей</div>
-    </div>
+  <div class="app">
+    <header class="header">
+      <div class="brand">
+        <div class="brand__title">БАЗА MG</div>
+        <div class="brand__sub">GM / UzAuto • Поиск деталей</div>
+      </div>
+      <div class="pill" id="envPill">Online</div>
+    </header>
 
-    <div class="card">
-      <input id="q" class="input" placeholder="Поиск: код / парт № / OEM / наименование" />
-      <button id="btn" class="btn">Искать</button>
-      <div id="st" class="status"></div>
-    </div>
+    <main class="main">
+      <section class="card">
+        <label class="label" for="q">Поиск</label>
+        <div class="inputRow">
+          <input id="q" class="input" placeholder="Код / Part № / OEM / Наименование" autocomplete="off" />
+        </div>
 
-    <div id="list" class="list"></div>
+        <div class="actions">
+          <button id="btn" class="btn">Искать</button>
+          <button id="clear" class="btn btn--ghost" type="button">Очистить</button>
+        </div>
+
+        <div class="hint">
+          Пример: <span class="kbd">UZIMFROEH00254</span> или <span class="kbd">3202-B-2RSR-TVH</span> или <span class="kbd">197884 jwf</span>
+        </div>
+
+        <div id="st" class="status"></div>
+      </section>
+
+      <section class="results">
+        <div class="results__head">
+          <div class="results__title">Результаты</div>
+          <div class="results__meta" id="meta">—</div>
+        </div>
+        <div id="list" class="list"></div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="footer__text">Версия: Mini App • /app</div>
+    </footer>
   </div>
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="static/app.js"></script>
+  <script src="/static/app.js"></script>
 </body>
 </html>
