@@ -8,7 +8,14 @@ from html import escape
 
 import pandas as pd
 import aiohttp  # для байтового фолбэка изображений
-from telegram import Update, InputFile, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import (
+    Update,
+    InputFile,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    WebAppInfo,
+    MenuButtonWebApp,
+)
 from telegram.ext import (
     CommandHandler,
     MessageHandler,
@@ -28,6 +35,7 @@ from app.config import (
     SUPPORT_CONTACT,
     WELCOME_MEDIA_ID,
     ADMINS,
+    WEBHOOK_URL,
 )
 
 # ВАЖНО: работаем через модуль, чтобы всегда видеть актуальные данные
@@ -69,6 +77,27 @@ def main_menu_markup():
             ],
             [InlineKeyboardButton("📞 Поддержка", callback_data="menu_contact")],
         ]
+    )
+
+
+# ---------- Mini App ----------
+def _mini_app_url() -> str:
+    base = (WEBHOOK_URL or "").strip().rstrip("/")
+    if not base:
+        return ""
+    if not base.startswith("http://") and not base.startswith("https://"):
+        base = "https://" + base
+    return base + "/app"
+
+
+def mini_app_markup():
+    url = _mini_app_url()
+    if not url:
+        return InlineKeyboardMarkup(
+            [[InlineKeyboardButton("⚠️ Mini App URL не задан", callback_data="noop")]]
+        )
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton("📦 Открыть каталог (Mini App)", web_app=WebAppInfo(url=url))]]
     )
 
 
@@ -398,6 +427,11 @@ async def menu_contact_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.message.reply_text(f"{SUPPORT_CONTACT}")
 
 
+async def noop_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+
+
 # --------------------- Команды -----------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -416,10 +450,40 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "• /cancel — отменить списание\n"
             "• /reload — перезагрузка данных и пользователей (только админ)\n"
             "• /broadcast — рассылка сообщения всем пользователям (только админ)\n"
+            "• /app — открыть каталог (Mini App)\n"
         )
         await _safe_send_html_message(
             context.bot, update.effective_chat.id, cmds_html
         )
+
+        # Mini App кнопка
+        await _safe_send_html_message(
+            context.bot,
+            update.effective_chat.id,
+            "📦 <b>Каталог деталей (Mini App)</b> — открыть в Telegram:",
+            reply_markup=mini_app_markup(),
+        )
+
+        # (опционально) постоянная кнопка меню Telegram
+        try:
+            url = _mini_app_url()
+            if url:
+                await context.bot.set_chat_menu_button(
+                    chat_id=update.effective_chat.id,
+                    menu_button=MenuButtonWebApp(
+                        text="📦 Каталог",
+                        web_app=WebAppInfo(url=url),
+                    ),
+                )
+        except Exception as e:
+            logger.warning(f"MenuButtonWebApp failed: {e}")
+
+
+async def app_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    url = _mini_app_url()
+    if not url:
+        return await update.message.reply_text("WEBHOOK_URL не задан — не могу открыть Mini App.")
+    await update.message.reply_text("📦 Открыть каталог деталей:", reply_markup=mini_app_markup())
 
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -921,6 +985,7 @@ def register_handlers(app):
 
     # Команды
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("app", app_cmd))
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("more", more_cmd))
     app.add_handler(CommandHandler("export", export_cmd))
@@ -944,6 +1009,7 @@ def register_handlers(app):
         CallbackQueryHandler(menu_issue_help_cb, pattern=r"^menu_issue_help$")
     )
     app.add_handler(CallbackQueryHandler(menu_contact_cb, pattern=r"^menu_contact$"))
+    app.add_handler(CallbackQueryHandler(noop_cb, pattern=r"^noop$"))
 
     # Пагинация и отмена
     app.add_handler(CallbackQueryHandler(on_more_click, pattern=r"^more$"))
@@ -978,4 +1044,3 @@ def register_handlers(app):
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, search_text), group=1
     )
-
