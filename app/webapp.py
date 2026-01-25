@@ -1,16 +1,14 @@
-# app/webapp.py
 import asyncio
 import logging
 import math
 import re
 from pathlib import Path
-
 from aiohttp import web
 
 import pandas as pd
 
 import app.data as data
-from app.config import MAX_QTY, SPREADSHEET_URL
+from app.config import PAGE_SIZE, MAX_QTY, SPREADSHEET_URL
 
 logger = logging.getLogger("bot.webapp")
 
@@ -29,80 +27,105 @@ async def page_item(request: web.Request):
 
 
 # ---------- Helpers ----------
-def _ensure_loaded():
-    # Гарантируем, что df есть
+def _pick_image_raw(row: dict) -> str:
+    # основной вариант: колонка "image"
+    for k in ("image", "Image", "IMAGE", "img", "photo", "фото", "картинка"):
+        v = row.get(k)
+        if v is None:
+            continue
+        v = str(v).strip()
+        if v:
+            return v
+    return ""
+
+
+async def _resolve_image_url(row: dict) -> str:
+    """
+    Возвращает прямую ссылку для <img src="...">.
+    Если в таблице уже лежит https://... то отдадим как есть,
+    иначе попробуем через data.resolve_image_url_async(...)
+    """
+    raw = _pick_image_raw(row)
+    if not raw:
+        return ""
+
+    # если ссылка уже выглядит как URL — отдаём сразу
+    if raw.startswith("http://") or raw.startswith("https://"):
+        # при желании всё равно можно резолвить, но это замедляет
+        try:
+            resolved = await data.resolve_image_url_async(raw)
+            return resolved or raw
+        except Exception:
+            return raw
+
+    # если хранишь не URL, а что-то ещё (имя/ключ) — пробуем резолв
+    try:
+        resolved = await data.resolve_image_url_async(raw)
+        return resolved or ""
+    except Exception:
+        return ""
+
+
+def _ensure_df_ready():
     if data.df is None:
         data.ensure_fresh_data(force=True)
-    return data.df
+    if data.df is None:
+        raise RuntimeError("DF is not loaded")
 
 
-def _to_float_qty(raw: str) -> float:
-    s = (raw or "").strip().replace(",", ".")
-    qty = float(s)
-    if not math.isfinite(qty) or qty <= 0 or qty > MAX_QTY:
-        raise ValueError("bad qty")
-    return float(f"{qty:.3f}")
+def _search_df(q: str) -> pd.DataFrame:
+    """
+    Повторяем логику поиска из handlers.py (упрощённо, но совместимо).
+    Возвращает DataFrame результатов, отсортированный по релевантности.
+    """
+    _ensure_df_ready()
+    df_ = data.df
 
+    q = (q or "").strip()
+    if not q:
+        return df_.iloc[0:0]
 
-def _safe_str(x) -> str:
-    return "" if x is None else str(x)
-
-
-def _find_part_by_code(df: pd.DataFrame, code: str):
-    if df is None or df.empty:
-        return None
-    if "код" not in df.columns:
-        return None
-    code_l = (code or "").strip().lower()
-    hit = df[df["код"].astype(str).str.strip().str.lower() == code_l]
-    if hit.empty:
-        return None
-    return hit.iloc[0].to_dict()
-
-
-def _build_search(df: pd.DataFrame, q: str):
-    # Поведение как в handlers.py (без диалога), чтобы совпадало с ботом
     tokens = data.normalize(q).split()
     q_squash = data.squash(q)
     norm_code = data._norm_code(q)
 
-    # 1) строгий поиск по нормализованному коду
+    # 1) индексный поиск
     if norm_code:
-        matched_indices = data.match_row_by_index([norm_code])
+        matched = data.match_row_by_index([norm_code])
     else:
-        matched_indices = data.match_row_by_index(tokens)
+        matched = data.match_row_by_index(tokens)
 
-    # 2) Фолбэк AND внутри поля, OR по полям
-    if not matched_indices:
-        mask_any = pd.Series(False, index=df.index)
+    # 2) fallback: AND внутри поля, OR по полям
+    if not matched:
+        mask_any = pd.Series(False, index=df_.index)
         for col in ["тип", "наименование", "код", "oem", "изготовитель"]:
-            series = data._safe_col(df, col)
+            series = data._safe_col(df_, col)
             if series is None:
                 continue
-            field_mask = pd.Series(True, index=df.index)
+            field_mask = pd.Series(True, index=df_.index)
             for t in tokens:
                 if t:
                     field_mask &= series.str.contains(re.escape(t), na=False)
             mask_any |= field_mask
-        matched_indices = set(df.index[mask_any])
+        matched = set(df_.index[mask_any])
 
-    # 3) Фразовый поиск по склеенным полям
-    if not matched_indices and q_squash:
-        mask_any = pd.Series(False, index=df.index)
+    # 3) фразовый squash
+    if not matched and q_squash:
+        mask_any = pd.Series(False, index=df_.index)
         for col in ["тип", "наименование", "код", "oem", "изготовитель"]:
-            series = data._safe_col(df, col)
+            series = data._safe_col(df_, col)
             if series is None:
                 continue
             series_sq = series.str.replace(r"[\W_]+", "", regex=True)
             mask_any |= series_sq.str.contains(re.escape(q_squash), na=False)
-        matched_indices = set(df.index[mask_any])
+        matched = set(df_.index[mask_any])
 
-    if not matched_indices:
-        return df.iloc[0:0].copy()
+    if not matched:
+        return df_.iloc[0:0]
 
-    results_df = df.loc[list(matched_indices)].copy()
+    results_df = df_.loc[list(matched)].copy()
 
-    # сортировка по релевантности (как в боте)
+    # scoring
     scores = []
     for _, r in results_df.iterrows():
         scores.append(
@@ -126,165 +149,197 @@ def _build_search(df: pd.DataFrame, q: str):
     return results_df.drop(columns="__score")
 
 
+def _row_to_public_dict(row: dict) -> dict:
+    """
+    Нормализуем выход под фронт.
+    Оставляем исходные поля + добавим image_url.
+    """
+    out = dict(row)
+
+    # гарантируем ключи в нижнем регистре для код/и т.п. не делаем,
+    # потому что у тебя фронт читает русские ключи как есть.
+    return out
+
+
 # ---------- API ----------
 async def api_health(request: web.Request):
     return web.json_response({"ok": True, "service": "BAZA MG Mini App", "path": "/app"})
 
 
 async def api_search(request: web.Request):
-    q = (request.query.get("q") or "").strip()
-    user_id = (request.query.get("user_id") or "0").strip()
+    try:
+        q = (request.query.get("q") or "").strip()
+        user_id = str(request.query.get("user_id") or "0")
 
-    if not q:
-        return web.json_response({"ok": False, "error": "Пустой запрос"}, status=400)
+        df_res = await asyncio.to_thread(_search_df, q)
 
-    df = await asyncio.to_thread(_ensure_loaded)
-    if df is None:
-        return web.json_response({"ok": False, "error": "Данные не загружены"}, status=500)
+        # ограничим выдачу (по умолчанию PAGE_SIZE*3, чтобы не грузить UI)
+        limit = int(request.query.get("limit") or 30)
+        limit = max(1, min(limit, 100))
 
-    results = await asyncio.to_thread(_build_search, df, q)
+        items = []
+        if not df_res.empty:
+            for _, r in df_res.head(limit).iterrows():
+                row = r.to_dict()
 
-    items = []
-    for _, row in results.iterrows():
-        d = row.to_dict()
+                # ВАЖНО: вытаскиваем image_url из колонки image
+                try:
+                    image_url = await _resolve_image_url(row)
+                except Exception:
+                    image_url = ""
 
-        # ВАЖНО: у тебя колонка называется 'image'
-        img = d.get("image", "")
-        d["image_url"] = _safe_str(img).strip()
+                row_public = _row_to_public_dict(row)
+                row_public["image_url"] = image_url  # <-- фронт увидит и покажет фото
 
-        items.append(d)
+                items.append(row_public)
 
-    return web.json_response(
-        {
-            "ok": True,
-            "q": q,
-            "user_id": user_id,
-            "count": len(items),
-            "items": items,
-        }
-    )
+        return web.json_response(
+            {
+                "ok": True,
+                "q": q,
+                "user_id": user_id,
+                "count": len(items),
+                "items": items,
+            }
+        )
+
+    except Exception as e:
+        logger.exception("api_search failed")
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
 
 
 async def api_item(request: web.Request):
-    code = (request.query.get("code") or "").strip().lower()
-    if not code:
-        return web.json_response({"ok": False, "error": "code обязателен"}, status=400)
-
-    df = await asyncio.to_thread(_ensure_loaded)
-    if df is None:
-        return web.json_response({"ok": False, "error": "Данные не загружены"}, status=500)
-
-    part = await asyncio.to_thread(_find_part_by_code, df, code)
-    if not part:
-        return web.json_response({"ok": False, "error": "Не найдено"}, status=404)
-
-    img = _safe_str(part.get("image", "")).strip()
-    return web.json_response(
-        {
-            "ok": True,
-            "code": code,
-            "item": part,
-            "image_url": img,
-            # формат как в боте (для страницы Описание)
-            "text": data.format_row(part),
-        }
-    )
-
-
-def _save_issue_to_sheet_sync(user_id: int, name: str, part: dict, quantity: float, comment: str):
-    import gspread
-
-    client = data.get_gs_client()
-    sh = client.open_by_url(SPREADSHEET_URL)
-
+    """
+    Данные для страницы /app/item?code=...
+    """
     try:
-        ws = sh.worksheet("История")
-    except gspread.WorksheetNotFound:
-        ws = sh.add_worksheet(title="История", rows=1000, cols=12)
-        ws.append_row(["Дата", "ID", "Имя", "Тип", "Наименование", "Код", "Количество", "Коментарий"])
+        code = (request.query.get("code") or "").strip().lower()
+        if not code:
+            return web.json_response({"ok": False, "error": "code is required"}, status=400)
 
-    headers_raw = ws.row_values(1)
-    headers = [h.strip() for h in headers_raw]
-    norm = [h.lower() for h in headers]
+        _ensure_df_ready()
+        df_ = data.df
 
-    ts = data.now_local_str()
+        found = None
+        if "код" in df_.columns:
+            hit = df_[df_["код"].astype(str).str.lower() == code]
+            if not hit.empty:
+                found = hit.iloc[0].to_dict()
 
-    values_by_key = {
-        "дата": ts,
-        "timestamp": ts,
-        "id": user_id,
-        "user_id": user_id,
-        "имя": name,
-        "name": name,
-        "тип": str(part.get("тип", "")),
-        "type": str(part.get("тип", "")),
-        "наименование": str(part.get("наименование", "")),
-        "name_item": str(part.get("наименование", "")),
-        "код": str(part.get("код", "")),
-        "code": str(part.get("код", "")),
-        "количество": str(quantity),
-        "qty": str(quantity),
-        "коментарий": comment or "",
-        "комментарий": comment or "",
-        "comment": comment or "",
-    }
+        if not found:
+            return web.json_response({"ok": False, "error": "not found"}, status=404)
 
-    row = [values_by_key.get(hn, "") for hn in norm]
-    ws.append_row(row, value_input_option="USER_ENTERED")
+        image_url = await _resolve_image_url(found)
+        found_public = _row_to_public_dict(found)
+        found_public["image_url"] = image_url
+        found_public["card_html"] = data.format_row(found)  # удобно для pre на странице
+
+        return web.json_response({"ok": True, "item": found_public})
+
+    except Exception as e:
+        logger.exception("api_item failed")
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
 
 
 async def api_issue(request: web.Request):
+    """
+    POST /api/issue {user_id, name, code, qty, comment}
+    Пишем в лист История (как в handlers.py).
+    """
     try:
         payload = await request.json()
-    except Exception:
-        return web.json_response({"ok": False, "error": "Неверный JSON"}, status=400)
+        user_id = int(payload.get("user_id") or 0)
+        name = str(payload.get("name") or "").strip()
+        code = str(payload.get("code") or "").strip().lower()
+        comment = str(payload.get("comment") or "").strip()
+        qty_raw = str(payload.get("qty") or "").strip().replace(",", ".")
 
-    user_id = int(payload.get("user_id") or 0)
-    name = (payload.get("name") or "").strip() or str(user_id)
-    code = (payload.get("code") or "").strip().lower()
-    qty_raw = payload.get("qty")
-    comment = (payload.get("comment") or "").strip()
+        if not code:
+            return web.json_response({"ok": False, "error": "code is required"}, status=400)
 
-    if not code:
-        return web.json_response({"ok": False, "error": "code обязателен"}, status=400)
-    if qty_raw is None:
-        return web.json_response({"ok": False, "error": "qty обязателен"}, status=400)
+        try:
+            qty = float(qty_raw)
+            if not math.isfinite(qty) or qty <= 0 or qty > MAX_QTY:
+                raise ValueError
+            qty = float(f"{qty:.3f}")
+        except Exception:
+            return web.json_response(
+                {"ok": False, "error": f"qty must be >0 and <= {MAX_QTY}"},
+                status=400,
+            )
 
-    try:
-        qty = _to_float_qty(str(qty_raw))
-    except Exception:
-        return web.json_response({"ok": False, "error": f"qty должен быть > 0 и ≤ {MAX_QTY}"}, status=400)
+        # найдём строку
+        _ensure_df_ready()
+        df_ = data.df
+        part = None
+        if "код" in df_.columns:
+            hit = df_[df_["код"].astype(str).str.lower() == code]
+            if not hit.empty:
+                part = hit.iloc[0].to_dict()
+        if not part:
+            return web.json_response({"ok": False, "error": "part not found"}, status=404)
 
-    df = await asyncio.to_thread(_ensure_loaded)
-    if df is None:
-        return web.json_response({"ok": False, "error": "Данные не загружены"}, status=500)
+        # запись в Google Sheet
+        import gspread
 
-    part = await asyncio.to_thread(_find_part_by_code, df, code)
-    if not part:
-        return web.json_response({"ok": False, "error": "Деталь не найдена"}, status=404)
+        client = data.get_gs_client()
+        sh = client.open_by_url(SPREADSHEET_URL)
+        try:
+            ws = sh.worksheet("История")
+        except gspread.WorksheetNotFound:
+            ws = sh.add_worksheet(title="История", rows=1000, cols=12)
+            ws.append_row(
+                ["Дата", "ID", "Имя", "Тип", "Наименование", "Код", "Количество", "Коментарий"]
+            )
 
-    try:
-        await asyncio.to_thread(_save_issue_to_sheet_sync, user_id, name, part, qty, comment)
-    except Exception as e:
-        logger.exception("Issue save failed")
-        return web.json_response({"ok": False, "error": f"Ошибка записи в История: {e}"}, status=500)
+        headers_raw = ws.row_values(1)
+        headers = [h.strip() for h in headers_raw]
+        norm = [h.lower() for h in headers]
 
-    return web.json_response(
-        {
-            "ok": True,
-            "code": code,
-            "qty": qty,
+        ts = data.now_local_str()
+        display_name = name or str(user_id)
+
+        values_by_key = {
+            "дата": ts,
+            "timestamp": ts,
+            "id": user_id,
+            "user_id": user_id,
+            "имя": display_name,
+            "name": display_name,
+            "тип": str(part.get("тип", "")),
+            "type": str(part.get("тип", "")),
+            "наименование": str(part.get("наименование", "")),
+            "name_item": str(part.get("наименование", "")),
+            "код": str(part.get("код", "")),
+            "code": str(part.get("код", "")),
+            "количество": str(qty),
+            "qty": str(qty),
+            "коментарий": comment or "",
+            "комментарий": comment or "",
+            "comment": comment or "",
         }
-    )
+
+        row_out = [values_by_key.get(hn, "") for hn in norm]
+        ws.append_row(row_out, value_input_option="USER_ENTERED")
+
+        return web.json_response({"ok": True})
+
+    except Exception as e:
+        logger.exception("api_issue failed")
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
 
 
-# ---------- App factory ----------
+# ---------- App builder ----------
 def build_web_app() -> web.Application:
     """
-    Mini App для Telegram.
-    ВАЖНО: мы отдаём статику по двум путям:
-      - /static/*   (чтобы index.html не менять)
-      - /app/static/* (если захочешь ссылаться так)
+    Mini App mounted at /app
+    API endpoints:
+      GET  /api/search
+      GET  /api/item
+      POST /api/issue
+    Static:
+      /static/*   (для твоего index.html)
+      /app/static/* (на всякий случай)
     """
     app = web.Application()
 
@@ -293,24 +348,15 @@ def build_web_app() -> web.Application:
     app.router.add_get("/app/", page_index)
     app.router.add_get("/app/item", page_item)
 
-    # API (как у тебя в JS: /api/search, /api/issue, /api/item)
-    app.router.add_get("/api/health", api_health)
+    # API
+    app.router.add_get("/app/api/health", api_health)
     app.router.add_get("/api/search", api_search)
     app.router.add_get("/api/item", api_item)
     app.router.add_post("/api/issue", api_issue)
 
-    # Static
-    # 1) чтобы работали ссылки из HTML: /static/style.css, /static/app.js, /static/item.js
-    if STATIC_DIR.exists():
-        app.router.add_static("/static/", str(STATIC_DIR), show_index=False)
-
-    # 2) альтернативно (если потом захочешь): /app/static/*
-    if STATIC_DIR.exists():
-        app.router.add_static("/app/static/", str(STATIC_DIR), show_index=False)
+    # Static (две точки монтирования, чтобы не было 404)
+    app.router.add_static("/static/", str(STATIC_DIR), show_index=False)
+    app.router.add_static("/app/static/", str(STATIC_DIR), show_index=False)
 
     logger.info("Mini App mounted at /app (static: /static/* and /app/static/*)")
-    return app
-
-
-    logger.info("Mini App mounted at /app")
     return app
