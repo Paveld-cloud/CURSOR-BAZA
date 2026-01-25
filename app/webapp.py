@@ -28,7 +28,6 @@ async def api_health(request: web.Request):
         "service": "BAZA MG Mini App",
     })
 
-
 async def api_search(request: web.Request):
     q = (request.query.get("q") or "").strip()
     user_id = request.query.get("user_id", "0")
@@ -36,20 +35,63 @@ async def api_search(request: web.Request):
     if not q:
         return web.json_response({"ok": False, "error": "Пустой запрос"}, status=400)
 
-    df = data.df
-    if df is None:
+    # гарантируем загрузку данных
+    if data.df is None:
         data.ensure_fresh_data(force=True)
-        df = data.df
 
-    if df is None:
+    df_ = data.df
+    if df_ is None:
         return web.json_response({"ok": False, "error": "Данные не загружены"}, status=500)
 
-    results = data.search_df(q)
+    tokens = data.normalize(q).split()
+    q_squash = data.squash(q)
+    norm_code = data._norm_code(q)
+
+    # 1) строгий поиск по коду
+    if norm_code:
+        matched = data.match_row_by_index([norm_code])
+    else:
+        matched = data.match_row_by_index(tokens)
+
+    # 2) fallback AND/OR
+    if not matched:
+        import pandas as pd
+        mask_any = pd.Series(False, index=df_.index)
+        for col in ["тип", "наименование", "код", "oem", "изготовитель"]:
+            series = data._safe_col(df_, col)
+            if series is None:
+                continue
+            field_mask = pd.Series(True, index=df_.index)
+            for t in tokens:
+                if t:
+                    field_mask &= series.str.contains(t, na=False)
+            mask_any |= field_mask
+        matched = set(df_.index[mask_any])
+
+    # 3) фразовый fallback
+    if not matched and q_squash:
+        import pandas as pd
+        mask_any = pd.Series(False, index=df_.index)
+        for col in ["тип", "наименование", "код", "oem", "изготовитель"]:
+            series = data._safe_col(df_, col)
+            if series is None:
+                continue
+            sq = series.str.replace(r"[\W_]+", "", regex=True)
+            mask_any |= sq.str.contains(q_squash, na=False)
+        matched = set(df_.index[mask_any])
+
+    if not matched:
+        return web.json_response({
+            "ok": True,
+            "items": [],
+            "count": 0
+        })
+
+    results = df_.loc[list(matched)].copy()
 
     items = []
     for _, row in results.iterrows():
         d = row.to_dict()
-        d["card_html"] = data.format_row(d)
         items.append(d)
 
     return web.json_response({
@@ -57,9 +99,8 @@ async def api_search(request: web.Request):
         "q": q,
         "user_id": user_id,
         "count": len(items),
-        "items": items,
+        "items": items
     })
-
 
 async def api_item(request: web.Request):
     code = (request.query.get("code") or "").strip().lower()
