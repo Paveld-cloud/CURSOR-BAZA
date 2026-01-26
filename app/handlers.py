@@ -309,8 +309,20 @@ async def _send_photo_with_fallback(bot, chat_id: int, url: str, caption: str, r
         return None
 
 
-async def send_row_with_image(update: Update, row: dict, text: str):
-    """
+async def url_raw = str(row.get("image") or row.get("image_url") or "").strip()
+
+# 2) если пусто — ищем по коду через индекс
+if not url_raw:
+    url_raw = await data.find_image_by_code_async(code)
+
+if not url_raw:
+    logger.info(f"[image] нет ссылки для кода: {code}")
+    return await _safe_send_html_message(
+        bot,
+        chat_id,
+        "📄 (без фото)\n" + text,
+        reply_markup=kb,
+    )
     Отправка карточки через update: если есть фото — фото + caption (HTML),
     если нет — текстовое сообщение через _safe_send_html_message.
     """
