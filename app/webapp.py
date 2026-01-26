@@ -370,4 +370,3 @@ def build_web_app() -> web.Application:
 
     return app
 
-
