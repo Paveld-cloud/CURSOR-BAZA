@@ -24,7 +24,6 @@ try:
         TZ_NAME,
         DATA_TTL,
         USERS_TTL,
-        IMAGE_STRICT,
         SAP_SHEET_NAME,
         USERS_SHEET_NAME,
         SEARCH_FIELDS,
@@ -37,7 +36,6 @@ except Exception:
     TZ_NAME = os.getenv("TIMEZONE", "Asia/Tashkent")
     DATA_TTL = int(os.getenv("DATA_TTL", "600"))
     USERS_TTL = int(os.getenv("USERS_TTL", "600"))
-    IMAGE_STRICT = str(os.getenv("IMAGE_STRICT", "1")).strip().lower() in {"1", "true", "yes", "y", "да", "ok", "ок"}
     SAP_SHEET_NAME = os.getenv("SAP_SHEET_NAME", "SAP")
     USERS_SHEET_NAME = os.getenv("USERS_SHEET_NAME", "Пользователи")
     SEARCH_COLUMNS = [
@@ -62,10 +60,8 @@ _last_load_ts: float = 0.0
 _search_index: Dict[str, Set[int]] = {}
 _row_blob: Dict[int, str] = {}
 
-# ВАЖНО: теперь это код -> url
+# ЕДИНСТВЕННЫЙ источник фото: code -> image
 _image_by_code: Dict[str, str] = {}
-# доп. индекс по имени файла (оставляем как резерв)
-_image_by_filename_token: Dict[str, str] = {}
 
 user_state: Dict[int, dict] = {}
 issue_state: Dict[int, dict] = {}
@@ -100,19 +96,6 @@ def val(d: dict, key: str, default: str = "") -> str:
     return str(d.get(key, default) or default)
 
 
-def _url_name_tokens(url: str) -> List[str]:
-    try:
-        path = re.sub(r"[?#].*$", "", str(url or ""))
-        name = path.rsplit("/", 1)[-1].rsplit(".", 1)[0].lower()
-        return re.findall(r"[0-9a-zа-яё]+", name, flags=re.I)
-    except Exception:
-        return []
-
-
-def squash(text: str) -> str:
-    return re.sub(r"[\W_]+", "", str(text or "").lower(), flags=re.U)
-
-
 def normalize(text: str) -> str:
     # требуется webapp.py
     return re.sub(r"[^\w\s]", " ", str(text or "").lower(), flags=re.U).strip()
@@ -142,8 +125,7 @@ def _dedupe_headers(headers: List[str]) -> List[str]:
 
 
 def _clean_query(q: str) -> str:
-    s = str(q or "").lower()
-    s = s.replace("_", " ")
+    s = str(q or "").lower().replace("_", " ")
     s = re.sub(r"\s+", " ", s, flags=re.U).strip()
     s = re.sub(r"[^\w\sа-яё0-9a-z]", " ", s, flags=re.I | re.U)
     s = re.sub(r"\s+", " ", s, flags=re.U).strip()
@@ -151,6 +133,7 @@ def _clean_query(q: str) -> str:
 
 
 def _get_search_cols(df_: pd.DataFrame) -> List[str]:
+    # поиск широкий (как у тебя сейчас работает)
     all_cols = [str(c).strip().lower() for c in df_.columns]
     all_cols = [c for c in all_cols if c and c not in {"image"}]
 
@@ -166,40 +149,6 @@ def _get_search_cols(df_: pd.DataFrame) -> List[str]:
 
     rest = [c for c in all_cols if c not in preferred and c not in extra]
     return preferred + extra + rest
-
-
-# ---------- Формат карточки ----------
-def format_row(row: dict) -> str:
-    code        = val(row, "код").upper()
-    name        = val(row, "наименование")
-    type_       = val(row, "тип")
-    part_no     = val(row, "парт номер")
-    oem_part    = val(row, "oem парт номер")
-    qty         = val(row, "количество") or "—"
-    price       = val(row, "цена")
-    currency    = val(row, "валюта")
-    manuf       = val(row, "изготовитель")
-    oem         = val(row, "oem")
-
-    lines: List[str] = []
-    if code:
-        lines.append(f"🔢 <b>Код:</b> {code}")
-    if name:
-        lines.append(f"📦 <b>Наименование:</b> {name}")
-    if type_:
-        lines.append(f"📎 <b>Тип:</b> {type_}")
-    if part_no:
-        lines.append(f"🧩 <b>Парт №:</b> {part_no}")
-    if oem_part:
-        lines.append(f"⚙️ <b>OEM №:</b> {oem_part}")
-    lines.append(f"📦 <b>Кол-во:</b> {qty}")
-    if price or currency:
-        lines.append(f"💰 <b>Цена:</b> {price} {currency}".rstrip())
-    if manuf:
-        lines.append(f"🏭 <b>Изготовитель:</b> {manuf}")
-    if oem:
-        lines.append(f"⚙️ <b>OEM:</b> {oem}")
-    return "\n".join(lines)
 
 
 # ---------- Google Sheets ----------
@@ -234,10 +183,9 @@ def _load_sap_dataframe() -> pd.DataFrame:
     for c in new_df.columns:
         new_df[c] = new_df[c].astype(str).fillna("").map(lambda x: str(x).strip())
 
-    # названия колонок -> lower
     new_df.columns = [str(c).strip().lower() for c in new_df.columns]
 
-    # нормализуем ключевые поля (если есть)
+    # ключевые поля
     for col in ("код", "oem", "парт номер", "oem парт номер"):
         if col in new_df.columns:
             new_df[col] = new_df[col].astype(str).map(lambda x: str(x).strip().lower())
@@ -260,6 +208,7 @@ def build_search_index(df_: pd.DataFrame) -> Dict[str, Set[int]]:
             if not raw:
                 continue
 
+            # кладём norm_code для любых колонок, чтобы коды ловились везде
             norm = _norm_code(raw)
             if norm and len(norm) >= 3:
                 idx.setdefault(norm, set()).add(i)
@@ -285,47 +234,30 @@ def build_row_blob(df_: pd.DataFrame) -> Dict[int, str]:
     return blobs
 
 
-def build_image_indexes(df_: pd.DataFrame) -> Tuple[Dict[str, str], Dict[str, str]]:
+def build_image_by_code(df_: pd.DataFrame) -> Dict[str, str]:
     """
-    1) PRIMARY: code -> image (строго по строке)
-    2) SECONDARY: tokens-from-filename -> image (резерв)
+    СТРОГО:
+    - берём только столбец image
+    - ключ: НОРМАЛИЗОВАННЫЙ код из столбца 'код'
     """
-    by_code: Dict[str, str] = {}
-    by_token: Dict[str, str] = {}
-
-    if "image" not in df_.columns:
-        return by_code, by_token
-
-    skip = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
+    m: Dict[str, str] = {}
+    if "код" not in df_.columns or "image" not in df_.columns:
+        return m
 
     for _, row in df_.iterrows():
+        code_raw = str(row.get("код", "")).strip()
         url = str(row.get("image", "")).strip()
-        if not url:
+        if not code_raw or not url:
             continue
-
-        # --- PRIMARY: код -> image
-        if "код" in df_.columns:
-            code_raw = str(row.get("код", "")).strip()
-            code_key = _norm_code(code_raw)
-            if code_key:
-                # первый непустой побеждает (стабильно)
-                by_code.setdefault(code_key, url)
-
-        # --- SECONDARY: по имени файла (резерв)
-        tokens = _url_name_tokens(url)
-        for t in tokens:
-            if t in skip or len(t) < 3:
-                continue
-            by_token.setdefault(_norm_code(t), url)
-        join = "".join(tokens)
-        if join:
-            by_token.setdefault(_norm_code(join), url)
-
-    return by_code, by_token
+        key = _norm_code(code_raw)
+        if not key:
+            continue
+        m.setdefault(key, url)  # первый непустой фиксируем
+    return m
 
 
 def ensure_fresh_data(force: bool = False):
-    global df, _search_index, _row_blob, _image_by_code, _image_by_filename_token, _last_load_ts
+    global df, _search_index, _row_blob, _image_by_code, _last_load_ts
     need = force or df is None or (time.time() - _last_load_ts > DATA_TTL)
     if not need:
         return
@@ -334,43 +266,28 @@ def ensure_fresh_data(force: bool = False):
     df = new_df
     _search_index = build_search_index(df)
     _row_blob = build_row_blob(df)
-    _image_by_code, _image_by_filename_token = build_image_indexes(df)
+    _image_by_code = build_image_by_code(df)
     _last_load_ts = time.time()
 
     logger.info(
-        f"✅ SAP reload: {len(df)} rows, index={len(_search_index)} keys, blobs={len(_row_blob)}, "
-        f"img_by_code={len(_image_by_code)}, img_by_name={len(_image_by_filename_token)}"
+        f"✅ SAP reload: {len(df)} rows, index={len(_search_index)} keys, blobs={len(_row_blob)}, img_by_code={len(_image_by_code)}"
     )
 
 
 # ---------- Картинки ----------
 async def find_image_by_code_async(code: str) -> str:
     """
-    ТВОЯ ЛОГИКА:
-    - всегда сначала ищем по коду: код -> image (из столбца image в той же строке)
-    - если пусто:
-        IMAGE_STRICT=1  -> ничего не возвращаем
-        IMAGE_STRICT=0  -> можно попробовать резерв по имени файла
+    ЖЁСТКО:
+    только код -> image из столбца image.
+    Никаких fallback. Никаких "из строки поиска". Никаких "по имени файла".
     """
     ensure_fresh_data()
     if not code:
         return ""
-
     key = _norm_code(code)
     if not key:
         return ""
-
-    # PRIMARY: по коду (из строки)
-    url = _image_by_code.get(key)
-    if url:
-        return url
-
-    if IMAGE_STRICT:
-        return ""
-
-    # SECONDARY: по имени файла/токенам (резерв)
-    url = _image_by_filename_token.get(key, "")
-    return url or ""
+    return _image_by_code.get(key, "") or ""
 
 
 def normalize_drive_url(url: str) -> str:
@@ -433,7 +350,6 @@ def match_row_by_index(tokens: List[str]) -> Set[int]:
     if not tokens:
         return set()
 
-    # 1) индекс (AND, потом OR)
     per_token_sets: List[Set[int]] = []
     for t in tokens:
         keys = _token_keys(t)
@@ -457,7 +373,6 @@ def match_row_by_index(tokens: List[str]) -> Set[int]:
         if found:
             return found
 
-    # 2) fallback "как раньше" — подстрока по всей строке
     q = _clean_query(" ".join([str(t) for t in tokens]))
     if not q or len(q) < 2:
         return set()
