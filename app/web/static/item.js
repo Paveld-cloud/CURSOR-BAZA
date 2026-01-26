@@ -1,226 +1,483 @@
-const tg = window.Telegram?.WebApp;
-if (tg) {
-  tg.expand();
-  tg.setHeaderColor('#121212');
-  tg.setBackgroundColor('#0b1220');
-  tg.ready();
+:root{
+  --bg:#0b1220;
+  --muted:#9fb2d6;
+  --text:#eaf2ff;
+
+  --line:rgba(255,255,255,.10);
+
+  --cardA: rgba(255,255,255,.08);
+  --cardB: rgba(255,255,255,.04);
+
+  --btn:#2563eb;
+  --btn2:rgba(255,255,255,.10);
+
+  --shadow:0 16px 40px rgba(0,0,0,.40);
+  --shadow2:0 10px 22px rgba(0,0,0,.32);
+
+  --radius:18px;
+
+  /* safe-area */
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+
+  /* GM Gold */
+  --gold: rgba(212,175,55,1);        /* #D4AF37 */
+  --goldSoft: rgba(212,175,55,.55);
+  --goldLine: rgba(212,175,55,.45);
+
+  /* header base (graphite) */
+  --hdrA: #0f0f10;
+  --hdrB: #141416;
+  --hdrC: #18181b;
+
+  /* header geometry */
+  --hdrRadius: 18px;
+  --hdrSidePad: 12px; /* ширина хедера внутри */
+  --hdrBottomPad: 10px;
+  --hdrTopPad: 10px;  /* разделение от системного бара */
 }
 
-const codeLine = document.getElementById("codeLine");
-const envPill = document.getElementById("envPill");
-const statusEl = document.getElementById("status");
-const box = document.getElementById("box");
-const img = document.getElementById("img");
-const photoWrap = document.getElementById("photoWrap");
-const backBtn = document.getElementById("back");
-const issueBtn = document.getElementById("issue");
+*{ box-sizing:border-box; }
+html,body{ height:100%; }
 
-function userId() { return tg?.initDataUnsafe?.user?.id || 0; }
-function userName() {
-  const u = tg?.initDataUnsafe?.user;
-  if (!u) return "";
-  const fn = (u.first_name || "").trim();
-  const ln = (u.last_name || "").trim();
-  return (fn + " " + ln).trim() || (u.username ? "@" + u.username : "");
+body{
+  margin:0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  color:var(--text);
+  background:
+    radial-gradient(1200px 700px at 12% -10%, rgba(37,99,235,.22), transparent 55%),
+    radial-gradient(900px 600px at 110% 8%, rgba(16,185,129,.09), transparent 55%),
+    radial-gradient(800px 520px at 60% 110%, rgba(168,85,247,.06), transparent 55%),
+    var(--bg);
 }
 
-function esc(s) {
-  return String(s ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
+/* =========================
+   Animations (light)
+========================= */
+@keyframes goldPulse{
+  0% { box-shadow: 0 0 10px rgba(212,175,55,.22); }
+  50% { box-shadow: 0 0 18px rgba(212,175,55,.38); }
+  100% { box-shadow: 0 0 10px rgba(212,175,55,.22); }
 }
 
-function setStatus(text, kind = "muted") {
-  statusEl.textContent = text || "";
-  statusEl.style.color =
-    kind === "error" ? "rgba(255,140,140,0.95)" :
-    kind === "ok" ? "rgba(140,255,190,0.90)" :
-    "rgba(255,255,255,0.62)";
+/* =========================
+   App shell
+========================= */
+.appShell{
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 0 12px calc(18px + var(--sab));
 }
 
-function toNum(x) {
-  const s = String(x ?? "").trim().replace(",", ".");
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
+/* =========================
+   TOPBAR — rounded, wider, more gold
+========================= */
+.appTopbar{
+  position: sticky;
+  top: 0;
+  z-index: 50;
+
+  /* чтобы не слипалось с системным баром */
+  padding-top: calc(var(--sat) + var(--hdrTopPad));
+  padding-bottom: 0;
+
+  /* делаем “шире”: отрицательный margin компенсирует appShell padding */
+  margin-left: -12px;
+  margin-right: -12px;
+
+  /* внутренние отступы */
+  padding-left: calc(12px + var(--hdrSidePad));
+  padding-right: calc(12px + var(--hdrSidePad));
 }
 
-async function safeJson(res) {
-  try { return await res.json(); } catch { return null; }
+/* внутренний контейнер хедера — чтобы красиво скруглить */
+.appTopbar{
+  border-radius: 0 0 var(--hdrRadius) var(--hdrRadius);
+  overflow: hidden;
+
+  background:
+    /* золотой ореол (верх/центр) */
+    radial-gradient(700px 220px at 18% 0%, rgba(212,175,55,.16), transparent 60%),
+    radial-gradient(520px 240px at 90% 10%, rgba(212,175,55,.10), transparent 60%),
+    /* базовый графит */
+    linear-gradient(180deg, var(--hdrA) 0%, var(--hdrB) 58%, var(--hdrC) 100%);
+
+  box-shadow:
+    0 14px 28px rgba(0,0,0,.46),
+    0 1px 0 rgba(255,255,255,.06) inset;
 }
 
-function getCodeFromUrl() {
-  const u = new URL(window.location.href);
-  return (u.searchParams.get("code") || "").trim().toLowerCase();
+/* содержимое: сетка */
+.appTopbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+
+  /* нижний padding у контента */
+  padding-bottom: var(--hdrBottomPad);
+
+  border-bottom: 1px solid rgba(212,175,55,.20);
 }
 
-/**
- * Убираем HTML-теги из текста, чтобы не видеть "<b>...</b>".
- * Поддержка: <br> -> \n, остальное режем.
- */
-function stripHtml(html) {
-  let s = String(html ?? "");
-  if (!s) return "";
-
-  // normalize breaks
-  s = s.replace(/<\s*br\s*\/?\s*>/gi, "\n");
-
-  // remove tags
-  s = s.replace(/<[^>]+>/g, "");
-
-  // decode minimum entities (достаточно для наших случаев)
-  s = s
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
-
-  // cleanup
-  s = s.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-  return s;
+/* верхняя “прокладка” — визуально отделяет от Telegram */
+.appTopbar::before{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  top:0;
+  height: var(--hdrTopPad);
+  background: rgba(0,0,0,.45);
+  pointer-events:none;
 }
 
-let CURRENT = { code: "", item: null };
+/* золотая линия снизу — толще и заметнее */
+.appTopbar::after{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:0;
+  height: 3px;
 
-function renderItem(item) {
-  const name = item["наименование"] || "Без наименования";
-  const type = item["тип"] || "—";
-  const pn = item["парт номер"] || item["part_number"] || "—";
+  background:
+    linear-gradient(90deg,
+      transparent,
+      rgba(212,175,55,.95),
+      rgba(255,224,120,.85),
+      rgba(212,175,55,.95),
+      transparent
+    );
 
-  // OEM: берём один раз, без дублей
-  const oem = item["oem парт номер"] || item["OEM парт номер"] || item["oem"] || "—";
+  box-shadow:
+    0 0 14px rgba(212,175,55,.55),
+    0 0 26px rgba(212,175,55,.26);
 
-  const qty = item["количество"] ?? item["остаток"] ?? "—";
-  const price = item["цена"] || "—";
-  const cur = item["валюта"] || "";
-  const mfg = item["изготовитель"] || item["manufacturer"] || "—";
-
-  // ВАЖНО:
-  // item.text часто приходит в HTML (<b>..</b>), поэтому:
-  // - либо игнорируем, либо чистим.
-  const cleanedText = stripHtml(item.text || "");
-  // Если текст пустой после очистки — не показываем блок.
-  const extraBlock = cleanedText
-    ? `<div class="pre">${esc(cleanedText)}</div>`
-    : "";
-
-  box.innerHTML = `
-    <div class="item">
-      <div class="itemBody">
-        <div class="title">${esc(name)}</div>
-
-        <div class="meta">
-          <div><b>Тип:</b> ${esc(type)}</div>
-          <div><b>Part №:</b> ${esc(pn)}</div>
-          <div><b>OEM:</b> ${esc(oem)}</div>
-          <div><b>Количество:</b> ${esc(qty)}</div>
-          <div><b>Цена:</b> ${esc(price)} ${esc(cur)}</div>
-          <div><b>Изготовитель:</b> ${esc(mfg)}</div>
-        </div>
-
-        ${extraBlock}
-      </div>
-    </div>
-  `;
-
-  const imageUrl = item.image_url || "";
-  if (imageUrl) {
-    img.src = imageUrl;
-    photoWrap.style.display = "block";
-  } else {
-    photoWrap.style.display = "none";
-  }
+  pointer-events:none;
 }
 
-async function loadItem() {
-  const code = getCodeFromUrl();
-  CURRENT.code = code;
-
-  if (!code) {
-    codeLine.textContent = "Код: —";
-    setStatus("Не передан код детали", "error");
-    box.innerHTML = "";
-    issueBtn.disabled = true;
-    return;
-  }
-
-  codeLine.textContent = `Код: ${code}`;
-  if (envPill) envPill.textContent = "Сеть";
-  setStatus("Загружаю карточку…", "muted");
-  box.innerHTML = "";
-  photoWrap.style.display = "none";
-  issueBtn.disabled = true;
-
-  // унифицированный путь
-  const res = await fetch(`/app/api/item?code=${encodeURIComponent(code)}&user_id=${encodeURIComponent(userId())}`, {
-    cache: "no-store"
-  });
-  const data = await safeJson(res);
-
-  if (!res.ok || !data || !data.ok) {
-    setStatus(data?.error || `Ошибка загрузки (${res.status})`, "error");
-    return;
-  }
-
-  const item = data.item || null;
-  if (!item) {
-    setStatus("Данные по детали пустые", "error");
-    return;
-  }
-
-  CURRENT.item = item;
-  renderItem(item);
-
-  setStatus("", "ok");
-  issueBtn.disabled = false;
+/* лёгкий золотой “пульс” на хедере (не раздражает) */
+.appTopbar{
+  animation: goldPulse 3.0s ease-in-out infinite;
 }
 
-backBtn.addEventListener("click", () => {
-  window.location.href = "/app";
-});
+.appTopbar__left{ min-width: 0; }
+.appTopbar__right{ display:flex; align-items:center; justify-content:flex-end; }
 
-issueBtn.addEventListener("click", async () => {
-  const code = CURRENT.code;
-  if (!code) return;
+.appTopbar__title{
+  font-size: 16px;
+  font-weight: 950;
+  letter-spacing: .30px;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-  const qtyStr = prompt("Сколько списать? (пример: 1 или 2.5)");
-  if (!qtyStr) return;
+.appTopbar__subtitle{
+  margin-top: 4px;
+  font-size: 12px;
+  color: rgba(255,255,255,.70);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-  const qtyNum = toNum(qtyStr);
-  if (qtyNum === null || qtyNum <= 0) {
-    alert("Введите корректное количество.");
-    return;
-  }
+.appMain{ padding-top: 12px; }
 
-  const comment = (prompt("Комментарий (пример: OP-1100 авария, замена датчика)") || "").trim();
+.appFooter{
+  margin-top: 14px;
+  padding: 10px 2px;
+  color: rgba(255,255,255,.45);
+  font-size: 12px;
+}
+.appFooter__text{ }
 
-  setStatus("Отправляю списание…", "muted");
+/* =========================
+   Status badge (Online) — gold outline
+========================= */
+.pill{
+  display:inline-flex;
+  align-items:center;
+  gap: 7px;
+  font-size: 12px;
+  padding: 7px 11px;
+  border-radius: 999px;
 
-  const payload = {
-    user_id: userId(),
-    name: userName(),
-    code: code,
-    qty: qtyNum,
-    comment: comment
-  };
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(212,175,55,.65);
 
-  const res = await fetch("/app/api/issue", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
+  color: rgba(255,255,255,.94);
+  box-shadow:
+    0 10px 18px rgba(0,0,0,.22),
+    0 0 0 3px rgba(212,175,55,.08);
 
-  const out = await safeJson(res);
+  white-space: nowrap;
+}
+.pill::before{
+  content:"";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34,197,94,.60);
+}
 
-  if (!res.ok || !out || !out.ok) {
-    const err = out?.error || `Ошибка списания (${res.status})`;
-    setStatus(err, "error");
-    alert(err);
-    return;
-  }
+/* =========================
+   Glass panels / cards
+========================= */
+.card,
+.panel{
+  position: relative;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--cardA), var(--cardB));
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 12px;
+  margin: 10px 0 14px;
+  overflow: hidden;
+}
+.card::before,
+.panel::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:
+    radial-gradient(700px 240px at 20% 0%, rgba(255,255,255,.09), transparent 60%),
+    radial-gradient(460px 220px at 90% 0%, rgba(212,175,55,.10), transparent 55%);
+  pointer-events:none;
+}
 
-  setStatus("Списание записано в История", "ok");
-  alert("Списание записано в История");
-});
+.label{
+  display:block;
+  font-size: 13px;
+  font-weight: 850;
+  margin-bottom: 8px;
+  color: rgba(255,255,255,.82);
+}
 
-loadItem();
+.input{
+  width: 100%;
+  padding: 12px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.14);
+  outline: none;
+  background: rgba(0,0,0,.22);
+  color: var(--text);
+  font-size: 15px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+}
+.input:focus{
+  border-color: rgba(212,175,55,.55);
+  box-shadow:
+    0 0 0 4px rgba(212,175,55,.16),
+    inset 0 1px 0 rgba(255,255,255,.05);
+}
+
+.btn{
+  appearance:none;
+  border:0;
+  border-radius: 14px;
+  padding: 11px 12px;
+  background: linear-gradient(180deg, rgba(37,99,235,1), rgba(37,99,235,.82));
+  color: white;
+  font-weight: 900;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 0 12px 22px rgba(37,99,235,.26);
+}
+.btn:active{ transform: translateY(1px) scale(.995); }
+
+.btn.ghost,
+.btn.btn--ghost{
+  background: rgba(255,255,255,.10);
+  box-shadow: none;
+  border: 1px solid rgba(255,255,255,.16);
+}
+
+.btnRowTop{
+  display:flex;
+  gap:10px;
+  margin-top:10px;
+}
+.btnRowTop .btn{ flex:1; }
+
+.status{
+  margin-top: 10px;
+  font-size: 13px;
+  color: rgba(255,255,255,.70);
+}
+.hint{
+  font-size: 13px;
+  color: rgba(255,255,255,.74);
+}
+.hint--mt{ margin-top: 10px; }
+
+.section{
+  font-weight: 950;
+  letter-spacing: .2px;
+}
+.listTop{
+  display:flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+.count{
+  color: rgba(255,255,255,.65);
+  font-size: 13px;
+}
+.chip{
+  display:inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.08);
+  color: rgba(255,255,255,.85);
+  font-size: 12px;
+}
+
+/* results grid */
+.list{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+@media (min-width: 700px){
+  .list{ grid-template-columns: 1fr 1fr; }
+}
+
+/* =========================
+   Result card
+========================= */
+.item{
+  position: relative;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.12);
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+  box-shadow: var(--shadow2);
+}
+
+.itemPhoto{
+  position: relative;
+  width: 100%;
+  height: 220px;
+  padding: 10px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background: rgba(0,0,0,.26);
+  border-bottom: 1px solid rgba(255,255,255,.10);
+}
+@media (min-width: 420px){
+  .itemPhoto{ height: 260px; }
+}
+.photo{
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display:block;
+  border-radius: 16px;
+  background: rgba(0,0,0,.16);
+  border: 1px solid rgba(255,255,255,.10);
+  box-shadow: 0 14px 28px rgba(0,0,0,.35);
+}
+.photo.fit-cover{ object-fit: cover; }
+
+.noPhoto{
+  color: rgba(255,255,255,.65);
+  font-size: 16px;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px dashed rgba(255,255,255,.18);
+  background: rgba(255,255,255,.06);
+}
+
+.itemBody{ padding: 12px 12px 14px; }
+
+.codeLine{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 14px;
+  font-weight: 950;
+  color: rgba(255,255,255,.92);
+}
+.codeLine b{
+  display:inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.10);
+  font-size: 13px;
+  letter-spacing: .15px;
+}
+
+.title{
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1.25;
+  margin: 2px 0 10px;
+}
+.meta{
+  display:grid;
+  gap: 7px;
+  font-size: 13px;
+  color: rgba(255,255,255,.78);
+  line-height: 1.25;
+  padding: 10px;
+  background: rgba(0,0,0,.18);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 14px;
+}
+.meta b{
+  color: rgba(255,255,255,.92);
+  font-weight: 900;
+}
+.btnRow{
+  display:flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+.btnRow .btn{ flex:1; }
+
+/* =========================
+   Detail page
+========================= */
+.photoWrap{ margin-top: 10px; }
+.box{ margin-top: 10px; }
+.img{
+  width:100%;
+  max-height: 320px;
+  object-fit: contain;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.22);
+  display:block;
+  padding: 8px;
+  box-shadow: 0 16px 30px rgba(0,0,0,.34);
+}
+.pre{
+  margin-top: 10px;
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text);
+  background: rgba(0,0,0,.18);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 14px;
+  padding: 10px;
+}
+.actions{
+  display:flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+.actions .btn{ flex:1; }
+
