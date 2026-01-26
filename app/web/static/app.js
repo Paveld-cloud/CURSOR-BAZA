@@ -1,16 +1,11 @@
-// app/web/static/app.js
 const tg = window.Telegram?.WebApp;
 if (tg) tg.expand();
 
-// Если Mini App открыта на /app, то API чаще всего тоже на /app/api/*
-// Если открыта в корне, то API на /api/*
-const API_PREFIX = window.location.pathname.startsWith("/app") ? "/app" : "";
-
 const q = document.getElementById("q");
 const btn = document.getElementById("btn");
+const clr = document.getElementById("clr"); // кнопка очистить
 const st = document.getElementById("st");
 const list = document.getElementById("list");
-const clr = document.getElementById("clr"); // может отсутствовать — это ок
 
 function userId() { return tg?.initDataUnsafe?.user?.id || 0; }
 function userName() {
@@ -20,6 +15,7 @@ function userName() {
   const ln = (u.last_name || "").trim();
   return (fn + " " + ln).trim() || (u.username ? "@"+u.username : "");
 }
+
 function esc(s){
   return String(s ?? "")
     .replaceAll("&","&amp;")
@@ -27,97 +23,74 @@ function esc(s){
     .replaceAll(">","&gt;");
 }
 
-// Универсальные геттеры (поддержка it.row и прямых полей)
-function getRow(it){
-  return (it && typeof it === "object" && it.row && typeof it.row === "object") ? it.row : it;
-}
-function getVal(it, keyRu, keyEn){
-  const r = getRow(it) || {};
-  return (r[keyRu] ?? r[keyEn] ?? it?.[keyRu] ?? it?.[keyEn] ?? "");
-}
-function getCode(it){ return String(getVal(it, "код", "code") || "").trim(); }
-function getName(it){ return String(getVal(it, "наименование", "name") || "").trim(); }
-function getType(it){ return String(getVal(it, "тип", "type") || "").trim(); }
-function getQty(it){ return String(getVal(it, "количество", "qty") || "").trim(); }
-function getPrice(it){ return String(getVal(it, "цена", "price") || "").trim(); }
-function getCurr(it){ return String(getVal(it, "валюта", "currency") || "").trim(); }
-function getPart(it){ return String(getVal(it, "парт номер", "part_no") || "").trim(); }
-function getOem(it){
-  return String(
-    getVal(it, "oem парт номер", "oem_part_no") ||
-    getVal(it, "oem", "oem") ||
-    ""
-  ).trim();
-}
-function getImg(it){
-  const r = getRow(it) || {};
-  return String(r["image_url"] ?? r["image"] ?? it?.image_url ?? it?.image ?? "").trim();
+function clearUI() {
+  q.value = "";
+  st.textContent = "";
+  list.innerHTML = "";
+  q.focus();
+  if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred("light");
 }
 
 async function doSearch(){
-  const text = (q?.value || "").trim();
-  if(!text){
-    if (st) st.textContent = "Введите запрос";
-    return;
-  }
+  const text = (q.value||"").trim();
+  if(!text){ st.textContent="Введите запрос"; return; }
 
-  if (st) st.textContent = "Ищу...";
-  if (list) list.innerHTML = "";
+  st.textContent="Ищу...";
+  list.innerHTML="";
 
-  const url = `${API_PREFIX}/api/search?q=${encodeURIComponent(text)}&user_id=${encodeURIComponent(userId())}`;
-
+  // ВАЖНО: у тебя API теперь на /app/api/search (и есть алиас /api/search)
+  const url = `/app/api/search?q=${encodeURIComponent(text)}&user_id=${encodeURIComponent(userId())}`;
   let res, data;
-  try{
-    res = await fetch(url, { method: "GET" });
+
+  try {
+    res = await fetch(url, { cache: "no-store" });
     data = await res.json();
-  }catch(e){
-    if (st) st.textContent = "Ошибка сети/сервера";
-    if (list) list.innerHTML = `<div class="item">Ошибка поиска. Проверь соединение/сервер.</div>`;
+  } catch (e) {
+    st.textContent = "Ошибка поиска. Проверьте соединение.";
     return;
   }
 
-  if(!res.ok || !data?.ok){
-    if (st) st.textContent = `Ошибка поиска (${res.status})`;
-    if (list) list.innerHTML = `<div class="item">Ошибка поиска. Проверь сервер/API путь.</div>`;
+  if(!res.ok || !data.ok){
+    st.textContent = data?.error || "Ошибка поиска";
     return;
   }
 
   const items = data.items || [];
-  if (st) st.textContent = `Найдено: ${items.length}`;
+  st.textContent = `Найдено: ${items.length}`;
 
   if(!items.length){
-    if (list) list.innerHTML = `<div class="item">Ничего не найдено</div>`;
+    list.innerHTML = `<div class="item"><div class="itemBody">Ничего не найдено</div></div>`;
     return;
   }
 
   for(const it of items){
-    const code = getCode(it);
-    const codeLower = code.toLowerCase();
+    const code = (it["код"]||"").toLowerCase();
+    const img = it["image_url"] || it["image"] || "";
 
     const html = `
       <div class="item">
-        <div class="itemPhoto">
-          ${
-            getImg(it)
-              ? `<img class="photo" src="${esc(getImg(it))}" alt="Фото" loading="lazy" />`
-              : `<div class="noPhoto">без фото</div>`
-          }
+        <div class="itemPhoto ${img ? "" : "noimg"}">
+          ${img ? `<img class="photo" src="${esc(img)}" alt="Фото" loading="lazy" />`
+                : `<div class="noPhoto">Фото не найдено</div>`}
         </div>
 
         <div class="itemBody">
-          <div class="codeLine">Код: <b>${esc(code)}</b> &nbsp; • &nbsp; Остаток: <b>${esc(getQty(it))}</b></div>
-          <div class="title">${esc(getName(it))}</div>
+          <div class="codeLine">
+            <span>КОД: <b>${esc(it["код"]||"")}</b></span>
+            <span>ОСТАТОК: <b>${esc(it["количество"]||"")}</b></span>
+          </div>
+
+          <div class="title">${esc(it["наименование"]||"")}</div>
 
           <div class="meta">
-            <div><b>Тип:</b> ${esc(getType(it))}</div>
-            <div><b>Part №:</b> ${esc(getPart(it))}</div>
-            <div><b>OEM:</b> ${esc(getOem(it))}</div>
-            <div><b>Цена:</b> ${esc(getPrice(it))} ${esc(getCurr(it))}</div>
+            <div>Тип: ${esc(it["тип"]||"")}</div>
+            <div>OEM: ${esc(it["oem"]||"")}</div>
+            <div>Цена: ${esc(it["цена"]||"")} ${esc(it["валюта"]||"")}</div>
           </div>
 
           <div class="btnRow">
-            <button class="btn" data-issue="${esc(codeLower)}">📦 Взять</button>
-            <button class="btn ghost" data-info="${esc(codeLower)}">ℹ️ Описание</button>
+            <button class="btn" data-issue="${esc(code)}">📦 Взять деталь</button>
+            <button class="btn ghost" data-info="${esc(code)}">ℹ️ Описание</button>
           </div>
         </div>
       </div>
@@ -125,23 +98,38 @@ async function doSearch(){
     list.insertAdjacentHTML("beforeend", html);
   }
 
-  // Описание
+  // ------------- Авто-адаптив фото: вертикаль/горизонталь -------------
+  // Логика: если фото "очень вертикальное" -> contain, иначе cover.
+  document.querySelectorAll(".photo").forEach(img => {
+    img.addEventListener("load", () => {
+      const w = img.naturalWidth || 1;
+      const h = img.naturalHeight || 1;
+      const ratio = w / h;
+
+      // пороги можно подкрутить, но эти хорошо работают в каталоге
+      if (ratio < 0.85) {
+        img.classList.add("fit-contain");  // вертикальные/высокие — показываем целиком
+      } else {
+        img.classList.add("fit-cover");    // горизонтальные/обычные — красиво заполняем блок
+      }
+    }, { once: true });
+  });
+
+  // ------------- Кнопка "Описание" -------------
   document.querySelectorAll("[data-info]").forEach(b=>{
     b.addEventListener("click", ()=>{
       const code = b.getAttribute("data-info");
-      window.location.href = `${API_PREFIX}/item?code=${encodeURIComponent(code)}`;
+      window.location.href = `/app/item?code=${encodeURIComponent(code)}`;
     });
   });
 
-  // Списание
+  // ------------- Кнопка "Взять деталь" -------------
   document.querySelectorAll("[data-issue]").forEach(b=>{
     b.addEventListener("click", async ()=>{
       const code = b.getAttribute("data-issue");
-
       const qty = prompt("Сколько списать? (пример: 1 или 2.5)");
       if(!qty) return;
-
-      const comment = prompt("Комментарий (пример: OP-1100, замена датчика)") || "";
+      const comment = prompt("Комментарий (пример: OP-1100 авария, замена датчика)") || "";
 
       const payload = {
         user_id: userId(),
@@ -152,19 +140,19 @@ async function doSearch(){
       };
 
       let res, out;
-      try{
-        res = await fetch(`${API_PREFIX}/api/issue`, {
+      try {
+        res = await fetch("/app/api/issue", {
           method:"POST",
           headers:{ "Content-Type":"application/json" },
           body: JSON.stringify(payload)
         });
         out = await res.json();
-      }catch(e){
-        alert("Ошибка сети/сервера при списании");
+      } catch (e) {
+        alert("Ошибка сети при списании");
         return;
       }
 
-      if(!res.ok || !out?.ok){
+      if(!res.ok || !out.ok){
         alert(out?.error || "Ошибка списания");
         return;
       }
@@ -173,12 +161,9 @@ async function doSearch(){
   });
 }
 
+// События
 btn?.addEventListener("click", doSearch);
 q?.addEventListener("keydown", e=>{ if(e.key==="Enter") doSearch(); });
 
-clr?.addEventListener("click", ()=>{
-  q.value = "";
-  if (st) st.textContent = "";
-  if (list) list.innerHTML = "";
-  q.focus();
-});
+// Очистить
+clr?.addEventListener("click", clearUI);
