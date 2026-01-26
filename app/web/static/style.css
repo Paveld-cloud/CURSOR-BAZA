@@ -1,11 +1,21 @@
 :root{
   --bg:#0b1220;
-  --muted:#8aa0c6;
-  --text:#e9f0ff;
-  --line:rgba(255,255,255,.08);
+  --muted:#9fb2d6;
+  --text:#eaf2ff;
+
+  --line:rgba(255,255,255,.10);
+  --line2:rgba(255,255,255,.16);
+
+  --cardA: rgba(255,255,255,.08);
+  --cardB: rgba(255,255,255,.04);
+
   --btn:#2563eb;
-  --btn2:rgba(255,255,255,.08);
-  --shadow:0 10px 30px rgba(0,0,0,.35);
+  --btn2:rgba(255,255,255,.10);
+
+  --shadow:0 16px 40px rgba(0,0,0,.40);
+  --shadow2:0 10px 22px rgba(0,0,0,.32);
+
+  --radius:18px;
 }
 
 *{ box-sizing:border-box; }
@@ -14,25 +24,27 @@ html,body{ height:100%; }
 body{
   margin:0;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-  background:
-    radial-gradient(1200px 700px at 20% -10%, rgba(37,99,235,.35), transparent 55%),
-    radial-gradient(900px 600px at 110% 10%, rgba(16,185,129,.15), transparent 55%),
-    var(--bg);
   color:var(--text);
+  background:
+    radial-gradient(1200px 700px at 12% -10%, rgba(37,99,235,.45), transparent 55%),
+    radial-gradient(900px 600px at 110% 8%, rgba(16,185,129,.18), transparent 55%),
+    radial-gradient(800px 520px at 60% 110%, rgba(168,85,247,.14), transparent 55%),
+    var(--bg);
 }
 
 /* =========================
-   Index layout (/app)
+   Layout (index + item)
 ========================= */
-.wrap{
+.wrap, .app{
   max-width: 980px;
   margin: 0 auto;
   padding: 14px 12px 28px;
 }
+
 .top{ margin: 6px 0 12px; }
 .h1{
   font-size: 20px;
-  font-weight: 800;
+  font-weight: 900;
   letter-spacing: .2px;
 }
 .sub{
@@ -41,14 +53,7 @@ body{
   color: var(--muted);
 }
 
-/* =========================
-   Mini App layout (item.html)
-========================= */
-.app{
-  max-width: 980px;
-  margin: 0 auto;
-  padding: 14px 12px 28px;
-}
+/* item.html header */
 .header{
   display:flex;
   align-items:center;
@@ -58,90 +63,148 @@ body{
 }
 .brand__title{
   font-size: 18px;
-  font-weight: 850;
+  font-weight: 900;
 }
 .brand__sub{
   margin-top: 4px;
   font-size: 13px;
   color: var(--muted);
 }
+
 .pill{
   font-size: 12px;
   padding: 6px 10px;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: rgba(255,255,255,.08);
-  color: rgba(255,255,255,.85);
+  color: rgba(255,255,255,.88);
+  box-shadow: 0 6px 16px rgba(0,0,0,.18);
 }
-.main{ }
-.footer{
-  margin-top: 14px;
-  color: rgba(255,255,255,.55);
-  font-size: 12px;
-}
-.footer__text{ }
 
 /* =========================
-   Base components
+   Panels / cards (glass)
 ========================= */
-.card{
-  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+.card,
+.panel{
+  position: relative;
+  border-radius: var(--radius);
   border: 1px solid var(--line);
-  border-radius: 16px;
+  background: linear-gradient(180deg, var(--cardA), var(--cardB));
   box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   padding: 12px;
   margin: 10px 0 14px;
+  overflow: hidden;
 }
 
+/* subtle top highlight */
+.card::before,
+.panel::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:
+    radial-gradient(700px 240px at 20% 0%, rgba(255,255,255,.09), transparent 60%),
+    radial-gradient(460px 220px at 90% 0%, rgba(37,99,235,.16), transparent 55%);
+  pointer-events:none;
+}
+
+/* =========================
+   Inputs / buttons
+========================= */
 .input{
   width: 100%;
   padding: 12px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--line);
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.14);
   outline: none;
-  background: rgba(0,0,0,.20);
+  background: rgba(0,0,0,.22);
   color: var(--text);
   font-size: 15px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+}
+.input:focus{
+  border-color: rgba(37,99,235,.55);
+  box-shadow:
+    0 0 0 4px rgba(37,99,235,.18),
+    inset 0 1px 0 rgba(255,255,255,.05);
 }
 
 .btn{
   appearance:none;
   border:0;
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 11px 12px;
-  background: var(--btn);
+  background: linear-gradient(180deg, rgba(37,99,235,1), rgba(37,99,235,.82));
   color: white;
-  font-weight: 700;
+  font-weight: 850;
   font-size: 14px;
   cursor: pointer;
-  box-shadow: 0 10px 18px rgba(37,99,235,.22);
+  box-shadow: 0 12px 22px rgba(37,99,235,.26);
 }
 .btn:active{ transform: translateY(1px); }
 
-.btn.ghost{
-  background: var(--btn2);
-  box-shadow: none;
-  border: 1px solid var(--line);
-}
-
-/* item.html uses btn--ghost */
+.btn.ghost,
 .btn.btn--ghost{
-  background: var(--btn2);
+  background: rgba(255,255,255,.10);
   box-shadow: none;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(255,255,255,.16);
 }
 
+.btnRowTop{
+  display:flex;
+  gap:10px;
+  margin-top:10px;
+}
+.btnRowTop .btn{ flex:1; }
+
+/* =========================
+   Text blocks
+========================= */
 .status{
   margin-top: 10px;
   font-size: 13px;
-  color: var(--muted);
+  color: rgba(255,255,255,.70);
+}
+.hint{
+  font-size: 13px;
+  color: rgba(255,255,255,.74);
+}
+.hint--mt{ margin-top: 10px; }
+
+.section{
+  font-weight: 900;
+  letter-spacing: .2px;
+}
+
+.listTop{
+  display:flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+.count{
+  color: rgba(255,255,255,.65);
+  font-size: 13px;
+}
+
+/* chips (если есть в index.html) */
+.chip{
+  display:inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.08);
+  color: rgba(255,255,255,.85);
+  font-size: 12px;
 }
 
 /* =========================
-   Results grid (/app)
+   Results grid
 ========================= */
 .list{
-  display: grid;
+  display:grid;
   grid-template-columns: 1fr;
   gap: 12px;
 }
@@ -150,118 +213,168 @@ body{
 }
 
 /* =========================
-   Card item blocks
+   EFFECT CARD (the main change)
+   .item is the result card
 ========================= */
 .item{
-  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  box-shadow: var(--shadow);
+  position: relative;
+  border-radius: 20px;
   overflow: hidden;
+  border: 1px solid rgba(255,255,255,.12);
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+  box-shadow: var(--shadow2);
+}
+
+/* gradient frame */
+.item::before{
+  content:"";
+  position:absolute;
+  inset:-2px;
+  border-radius: 22px;
+  background:
+    linear-gradient(135deg,
+      rgba(37,99,235,.60),
+      rgba(16,185,129,.35),
+      rgba(168,85,247,.38)
+    );
+  filter: blur(14px);
+  opacity: .55;
+  pointer-events:none;
+}
+
+/* inner glass layer */
+.item::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius: 20px;
+  background:
+    radial-gradient(700px 280px at 25% 0%, rgba(255,255,255,.08), transparent 55%),
+    radial-gradient(420px 260px at 95% 10%, rgba(37,99,235,.14), transparent 60%);
+  pointer-events:none;
 }
 
 .itemPhoto{
+  position: relative;
   width: 100%;
   height: 220px;
-  background: rgba(0,0,0,.22);
-  border-bottom: 1px solid var(--line);
+  padding: 10px;
   display:flex;
   align-items:center;
   justify-content:center;
-  padding: 8px;
-  overflow:hidden;
+  background:
+    radial-gradient(420px 220px at 50% 40%, rgba(255,255,255,.06), transparent 60%),
+    rgba(0,0,0,.26);
+  border-bottom: 1px solid rgba(255,255,255,.10);
 }
 @media (min-width: 420px){
   .itemPhoto{ height: 260px; }
 }
 
+/* photo: clean “product shot” */
 .photo{
   width: 100%;
   height: 100%;
-  display:block;
-  object-fit: contain; /* базово показываем целиком */
-}
-
-/* Автовыбор: классы ставит JS */
-.photo.fit-cover{ object-fit: cover; }
-.photo.fit-contain{
   object-fit: contain;
-  background: #000;
+  display:block;
+  border-radius: 16px;
+  background: rgba(0,0,0,.16);
+  border: 1px solid rgba(255,255,255,.10);
+  box-shadow: 0 14px 28px rgba(0,0,0,.35);
 }
+.photo.fit-cover{ object-fit: cover; }
 
 .noPhoto{
-  color: var(--muted);
-  font-size: 18px;
-  padding: 17px;
+  color: rgba(255,255,255,.65);
+  font-size: 16px;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px dashed rgba(255,255,255,.18);
+  background: rgba(255,255,255,.06);
 }
 
 .itemBody{
-  padding: 12px;
+  position: relative;
+  padding: 12px 12px 14px;
 }
 
+/* Header line: CODE + STOCK chips */
 .codeLine{
-  font-size: 15px;
-  font-weight: 850;
-  color: #ffffff;
   display:flex;
-  flex-wrap: wrap;
+  align-items:center;
+  justify-content:space-between;
   gap: 10px;
-  align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  font-weight: 900;
 }
+
+/* Make the code and stock look like badges */
 .codeLine b{
-  font-size: 16px;
-  padding: 2px 8px;
-  border-radius: 10px;
+  display:inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.14);
   background: rgba(255,255,255,.10);
-  border: 1px solid var(--line);
+  font-size: 13px;
+  letter-spacing: .15px;
+}
+
+/* if codeLine contains plain text too, keep it readable */
+.codeLine{
+  font-size: 14px;
+  color: rgba(255,255,255,.92);
 }
 
 .title{
   font-size: 15px;
-  font-weight: 750;
+  font-weight: 850;
   line-height: 1.25;
   margin: 2px 0 10px;
 }
 
+/* Meta block: tighter and “panel” */
 .meta{
   display:grid;
-  gap: 6px;
+  gap: 7px;
   font-size: 13px;
-  color: var(--muted);
+  color: rgba(255,255,255,.78);
   line-height: 1.25;
   padding: 10px;
   background: rgba(0,0,0,.18);
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 14px;
 }
 
+/* emphasize labels */
+.meta b{
+  color: rgba(255,255,255,.92);
+  font-weight: 850;
+}
+
+/* Buttons on card */
 .btnRow{
   display:flex;
   gap: 10px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
-.btnRow .btn{ flex: 1; }
+.btnRow .btn{ flex:1; }
 
 /* =========================
-   item.html detail page
+   Detail page (item.html)
 ========================= */
-.photoWrap{
-  margin-top: 10px;
-}
-.box{
-  margin-top: 10px;
-}
+.photoWrap{ margin-top: 10px; }
+.box{ margin-top: 10px; }
 
 .img{
   width:100%;
   max-height: 320px;
   object-fit: contain;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(0,0,0,.2);
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.22);
   display:block;
-  padding: 6px;
+  padding: 8px;
+  box-shadow: 0 16px 30px rgba(0,0,0,.34);
 }
 
 .pre{
@@ -271,8 +384,8 @@ body{
   line-height: 1.35;
   color: var(--text);
   background: rgba(0,0,0,.18);
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 14px;
   padding: 10px;
 }
 
@@ -283,16 +396,10 @@ body{
 }
 .actions .btn{ flex:1; }
 
-.hint{
-  font-size: 13px;
-  color: rgba(255,255,255,.70);
+/* Footer */
+.footer{
+  margin-top: 14px;
+  color: rgba(255,255,255,.55);
+  font-size: 12px;
 }
-.hint--mt{ margin-top: 10px; }
-
-/* верхние кнопки (Искать/Очистить) */
-.btnRowTop{
-  display:flex;
-  gap:10px;
-  margin-top:10px;
-}
-.btnRowTop .btn{ flex:1; }
+.footer__text{}
