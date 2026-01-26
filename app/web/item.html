@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Описание — БАЗА MG</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="brand">
+        <div class="brand__title">Описание</div>
+        <div class="brand__sub" id="codeLine">—</div>
+      </div>
+      <div class="pill" id="envPill">Online</div>
+    </header>
+
+    <main class="main">
+      <section class="card">
+        <div id="status" class="status"></div>
+
+        <div id="photoWrap" style="display:none; margin-top:10px;">
+          <img id="img" alt="Фото" style="width:100%; border-radius:14px; border:1px solid rgba(255,255,255,0.10);" />
+        </div>
+
+        <div id="box" style="margin-top:10px;"></div>
+
+        <div class="actions" style="margin-top:12px;">
+          <button id="issue" class="btn">📦 Взять деталь</button>
+          <button id="back" class="btn btn--ghost" type="button">Назад</button>
+        </div>
+
+        <div class="hint" style="margin-top:10px;">
+          Списание попадёт в лист <b>История</b>. Количество и комментарий запросит приложение.
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="footer__text">БАЗА MG • Деталь</div>
+    </footer>
+  </div>
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="/static/item.js"></script>
+</body>
+</html>

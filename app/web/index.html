@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>БАЗА MG</title>
+  <link rel="stylesheet" href="/static/style.css?v=20260126_3" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="h1">🏭 БАЗА MG</div>
+      <div class="sub">GM / UzAuto • Поиск деталей</div>
+      <div id="statusPill" class="pill">Online</div>
+    </div>
+
+    <div class="panel">
+      <label class="label">Поиск</label>
+
+      <div class="row">
+        <input id="q" class="input" placeholder="код / парт № / OEM / наименование" />
+      </div>
+
+    <button id="btn" class="btn">Искать</button>
+    <button id="clr" class="btn ghost">Очистить</button>
+  </div>
+  <div id="st" class="status"></div>
+    </div>
+
+      <div class="hint">
+        Пример:
+        <span class="chip">UZIMFROEH00254</span>
+        или
+        <span class="chip">3202-B-2RSR-TVH</span>
+        или
+        <span class="chip">197884 jwf</span>
+      </div>
+
+      <div id="st" class="status"></div>
+    </div>
+
+    <div class="listTop">
+      <div class="section">Результаты</div>
+      <div id="cnt" class="count"></div>
+    </div>
+
+    <div id="list" class="list"></div>
+
+    <div class="footer">Версия: Mini App • /app</div>
+  </div>
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="/static/app.js?v=20260126_3"></script>
+</body>
+</html>
