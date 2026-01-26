@@ -129,8 +129,8 @@ body{
 
 .noPhoto{
   color: var(--muted);
-  font-size: 13px;
-  padding: 12px;
+  font-size: 18px;
+  padding: 17px;
 }
 
 .itemBody{
