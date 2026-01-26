@@ -11,20 +11,10 @@ import app.data as data
 
 logger = logging.getLogger("webapp")
 
-# Структура:
-# app/
-#   web/
-#     index.html
-#     item.html
-#     static/
-#       app.js, item.js, style.css
 WEB_DIR = Path(__file__).resolve().parent / "web"
 STATIC_DIR = WEB_DIR / "static"
 
 
-# ----------------------------
-# cache headers (иначе Telegram держит старый JS/CSS)
-# ----------------------------
 def _no_cache_headers(resp: web.StreamResponse) -> web.StreamResponse:
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     resp.headers["Pragma"] = "no-cache"
@@ -33,7 +23,6 @@ def _no_cache_headers(resp: web.StreamResponse) -> web.StreamResponse:
 
 
 async def _ensure_df() -> None:
-    # data.ensure_fresh_data() синхронный, уводим в thread
     if getattr(data, "df", None) is None:
         await asyncio.to_thread(data.ensure_fresh_data, True)
 
@@ -42,43 +31,7 @@ def _s(x) -> str:
     return str(x or "").strip()
 
 
-def _to_row_dict(row: dict) -> dict:
-    """Возвращаем row в исходных русских ключах (как в боте/Google Sheet)."""
-    return {
-        "код": _s(row.get("код")),
-        "наименование": _s(row.get("наименование")),
-        "изготовитель": _s(row.get("изготовитель")),
-        "парт номер": _s(row.get("парт номер")),
-        "oem парт номер": _s(row.get("oem парт номер")),
-        "тип": _s(row.get("тип")),
-        "количество": _s(row.get("количество")),
-        "цена": _s(row.get("цена")),
-        "валюта": _s(row.get("валюта")),
-        "oem": _s(row.get("oem")),
-        "image": _s(row.get("image")),
-    }
-
-
-async def _image_for_code(code: str) -> str:
-    """
-    Главное правило:
-    картинку ищем ПО КОДУ в имени файла (через индекс data.py),
-    а не по "image" из текущей строки (там может быть съезд).
-    """
-    if not code:
-        return ""
-
-    # 1) ищем URL в индексе по коду
-    url_raw = await data.find_image_by_code_async(code)
-    if not url_raw:
-        return ""
-
-    # 2) приводим к прямой ссылке (drive / ibb.co -> i.ibb.co)
-    return await data.resolve_image_url_async(url_raw)
-
-
 def _row_to_card_item(row: dict, image_url: str) -> dict:
-    """Формат для списка карточек на главной (/app)."""
     return {
         "code": _s(row.get("код")).upper(),
         "name": _s(row.get("наименование")),
@@ -93,8 +46,23 @@ def _row_to_card_item(row: dict, image_url: str) -> dict:
     }
 
 
+async def _image_for_code(code: str) -> str:
+    """
+    ГЛАВНОЕ:
+    Картинку ищем ПО КОДУ в имени файла (по всему столбцу image), а не по "своей строке".
+    Это уже реализовано в app/data.py.
+    """
+    if not code:
+        return ""
+
+    url_raw = await data.find_image_by_code_async(code)
+    if not url_raw:
+        return ""
+
+    return await data.resolve_image_url_async(url_raw)
+
+
 def _card_html(row: dict) -> str:
-    """Небольшой HTML для item.html (безопасный)."""
     name = html.escape(_s(row.get("наименование")) or "Без наименования")
     typ = html.escape(_s(row.get("тип")) or "—")
     part = html.escape(_s(row.get("парт номер")) or "—")
@@ -103,13 +71,15 @@ def _card_html(row: dict) -> str:
     price = html.escape(_s(row.get("цена")) or "—")
     cur = html.escape(_s(row.get("валюта")) or "")
     maker = html.escape(_s(row.get("изготовитель")) or "—")
+    oem = html.escape(_s(row.get("oem")) or "—")
 
     return (
         f"<div><b>{name}</b></div>"
-        f"<div style='margin-top:8px; line-height:1.55'>"
+        f"<div style='margin-top:8px; line-height:1.6'>"
         f"<div><b>Тип:</b> {typ}</div>"
         f"<div><b>Part №:</b> {part}</div>"
         f"<div><b>OEM Part №:</b> {oem_part}</div>"
+        f"<div><b>OEM:</b> {oem}</div>"
         f"<div><b>Количество:</b> {qty}</div>"
         f"<div><b>Цена:</b> {price} {cur}</div>"
         f"<div><b>Изготовитель:</b> {maker}</div>"
@@ -174,7 +144,7 @@ async def api_search(request: web.Request):
     except Exception:
         matched = set()
 
-    # 2) фолбэк AND по токенам (мягко)
+    # 2) фолбэк AND по токенам
     if not matched:
         mask_any = pd.Series(False, index=df_.index)
         for col in ["тип", "наименование", "код", "oem", "изготовитель", "парт номер", "oem парт номер"]:
@@ -207,24 +177,31 @@ async def api_search(request: web.Request):
     # сортировка по релевантности (как в боте)
     scores = []
     for _, r in results_df.iterrows():
-        scores.append(data._relevance_score(r.to_dict(), tokens + ([norm_code] if norm_code else []), q_squash))
+        scores.append(
+            data._relevance_score(
+                r.to_dict(),
+                tokens + ([norm_code] if norm_code else []),
+                q_squash
+            )
+        )
     results_df["__score"] = scores
+
     if "код" in results_df.columns:
         results_df = results_df.sort_values(by=["__score", "код"], ascending=[False, True])
     else:
         results_df = results_df.sort_values(by=["__score"], ascending=False)
+
     results_df = results_df.drop(columns="__score", errors="ignore")
 
-    # ограничим, чтобы не тормозить (картинки резолвятся)
+    # чтобы не тормозить на картинках
     results_df = results_df.head(25)
 
     rows = [r.to_dict() for _, r in results_df.iterrows()]
     codes = [str(r.get("код", "")).strip() for r in rows]
 
-    # картинки ищем строго по коду (даже если в строке image не совпадает)
     images = await asyncio.gather(*[_image_for_code(c) for c in codes])
-
     out = [_row_to_card_item(row, img) for row, img in zip(rows, images)]
+
     return web.json_response(out)
 
 
@@ -242,8 +219,7 @@ async def api_item(request: web.Request):
     if hit.empty:
         return web.json_response({"ok": False, "error": "not_found"}, status=404)
 
-    row_raw = hit.iloc[0].to_dict()
-    row = _to_row_dict(row_raw)
+    row = hit.iloc[0].to_dict()
     image_url = await _image_for_code(code)
 
     return web.json_response(
@@ -256,107 +232,6 @@ async def api_item(request: web.Request):
     )
 
 
-async def api_issue(request: web.Request):
-    """
-    Списание из mini-app (кнопка 📦 Взять деталь в item.html).
-
-    Формат payload (см. web/static/item.js):
-      { user_id, name, code, qty, comment }
-    """
-    try:
-        payload = await request.json()
-    except Exception:
-        return web.json_response({"ok": False, "error": "bad_json"}, status=400)
-
-    user_id = int(payload.get("user_id") or 0)
-    name = _s(payload.get("name"))
-    code = _s(payload.get("code")).upper()
-    qty = payload.get("qty")
-    comment = _s(payload.get("comment"))
-
-    if not user_id or not code:
-        return web.json_response({"ok": False, "error": "missing_user_or_code"}, status=400)
-
-    try:
-        qty_f = float(str(qty).replace(",", "."))
-        if qty_f <= 0:
-            raise ValueError
-    except Exception:
-        return web.json_response({"ok": False, "error": "bad_qty"}, status=400)
-
-    await _ensure_df()
-    df_ = data.df
-    if df_ is None or df_.empty or "код" not in df_.columns:
-        return web.json_response({"ok": False, "error": "no_data"}, status=500)
-
-    hit = df_[df_["код"].astype(str).str.upper() == code]
-    if hit.empty:
-        return web.json_response({"ok": False, "error": "not_found"}, status=404)
-
-    part = hit.iloc[0].to_dict()
-
-    # Запись в Google Sheet "История" (логика совместима с handlers.save_issue_to_sheet)
-    try:
-        from app.config import SPREADSHEET_URL
-        import gspread
-
-        client = data.get_gs_client()
-        sh = client.open_by_url(SPREADSHEET_URL)
-        try:
-            ws = sh.worksheet("История")
-        except gspread.WorksheetNotFound:
-            ws = sh.add_worksheet(title="История", rows=1000, cols=12)
-            ws.append_row(
-                [
-                    "Дата",
-                    "ID",
-                    "Имя",
-                    "Тип",
-                    "Наименование",
-                    "Код",
-                    "Количество",
-                    "Коментарий",
-                ]
-            )
-
-        headers_raw = ws.row_values(1)
-        headers = [h.strip() for h in headers_raw]
-        norm = [h.lower() for h in headers]
-
-        ts = data.now_local_str()
-        values_by_key = {
-            "дата": ts,
-            "timestamp": ts,
-            "id": user_id,
-            "user_id": user_id,
-            "имя": name or str(user_id),
-            "name": name or str(user_id),
-            "тип": str(part.get("тип", "")),
-            "type": str(part.get("тип", "")),
-            "наименование": str(part.get("наименование", "")),
-            "name_item": str(part.get("наименование", "")),
-            "код": str(part.get("код", "")),
-            "code": str(part.get("код", "")),
-            "количество": str(qty_f),
-            "qty": str(qty_f),
-            "коментарий": comment or "",
-            "комментарий": comment or "",
-            "comment": comment or "",
-        }
-
-        row_out = [values_by_key.get(hn, "") for hn in norm]
-        ws.append_row(row_out, value_input_option="USER_ENTERED")
-
-        logger.info("[webapp] issue saved: user=%s code=%s qty=%s", user_id, code, qty_f)
-        return web.json_response({"ok": True})
-    except Exception as e:
-        logger.exception("[webapp] issue save failed")
-        return web.json_response({"ok": False, "error": f"sheet_error: {e}"}, status=500)
-
-
-# ----------------------------
-# factory
-# ----------------------------
 def build_web_app() -> web.Application:
     app = web.Application()
 
@@ -366,7 +241,6 @@ def build_web_app() -> web.Application:
 
     app.router.add_get("/api/search", api_search)
     app.router.add_get("/api/item", api_item)
-    app.router.add_post("/api/issue", api_issue)
 
     return app
 
