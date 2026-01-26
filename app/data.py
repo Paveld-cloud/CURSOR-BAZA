@@ -62,8 +62,6 @@ _last_load_ts: float = 0.0
 
 _search_index: Dict[str, Set[int]] = {}
 _image_index: Dict[str, str] = {}
-
-# precomputed blobs for substring fallback (row_index -> text)
 _row_blob: Dict[int, str] = {}
 
 user_state: Dict[int, dict] = {}
@@ -108,6 +106,18 @@ def _url_name_tokens(url: str) -> List[str]:
         return []
 
 
+def squash(text: str) -> str:
+    return re.sub(r"[\W_]+", "", str(text or "").lower(), flags=re.U)
+
+
+def normalize(text: str) -> str:
+    """
+    ВАЖНО: функция нужна для webapp.py
+    Делает безопасную нормализацию текста в слова.
+    """
+    return re.sub(r"[^\w\s]", " ", str(text or "").lower(), flags=re.U).strip()
+
+
 def _canon_header(h: str, idx: int) -> str:
     s = str(h or "").strip().lower().replace("_", " ")
     s = re.sub(r"\s+", " ", s, flags=re.U).strip()
@@ -132,12 +142,6 @@ def _dedupe_headers(headers: List[str]) -> List[str]:
 
 
 def _clean_query(q: str) -> str:
-    """
-    Нормализация запроса для substring fallback:
-    - lower
-    - пробелы схлопнуть
-    - убрать мусор, но оставить буквы/цифры/пробел
-    """
     s = str(q or "").lower()
     s = s.replace("_", " ")
     s = re.sub(r"\s+", " ", s, flags=re.U).strip()
@@ -209,11 +213,9 @@ def _load_sap_dataframe() -> pd.DataFrame:
 
     new_df = pd.DataFrame(rows, columns=headers)
 
-    # чистка значений
     for c in new_df.columns:
         new_df[c] = new_df[c].astype(str).fillna("").map(lambda x: str(x).strip())
 
-    # нормализуем code-like поля
     for col in ("код", "oem", "парт номер", "oem парт номер"):
         if col in new_df.columns:
             new_df[col] = new_df[col].astype(str).map(lambda x: str(x).strip().lower())
@@ -236,13 +238,11 @@ def build_search_index(df_: pd.DataFrame) -> Dict[str, Set[int]]:
             if not raw:
                 continue
 
-            # code-like
             if c in ("код", "парт номер", "oem парт номер", "oem"):
                 norm = _norm_code(raw)
                 if norm:
                     idx.setdefault(norm, set()).add(i)
 
-            # words/tokens (RU+EN+digits)
             for t in token_re.findall(raw):
                 key = _norm_str(t)
                 if key and len(key) >= 2:
@@ -252,12 +252,6 @@ def build_search_index(df_: pd.DataFrame) -> Dict[str, Set[int]]:
 
 
 def build_row_blob(df_: pd.DataFrame) -> Dict[int, str]:
-    """
-    Для поиска 'как раньше' делаем текстовый blob по строке:
-    - объединяем ключевые колонки
-    - lower
-    - с пробелами (без спецсимволов это не критично)
-    """
     cols = [c for c in SEARCH_COLUMNS if c in df_.columns]
     blobs: Dict[int, str] = {}
     for i, row in df_.iterrows():
@@ -393,14 +387,14 @@ def _token_keys(raw_token: str) -> List[str]:
 
 def match_row_by_index(tokens: List[str]) -> Set[int]:
     """
-    1) Пытаемся через индекс (быстро)
-    2) Если индекс пустой — fallback "как раньше": поиск по подстроке в blob по всей строке
+    1) индекс
+    2) если пусто — substring fallback "как раньше"
     """
     ensure_fresh_data()
     if not tokens:
         return set()
 
-    # ---- 1) индекс (AND, потом OR)
+    # 1) индекс
     per_token_sets: List[Set[int]] = []
     for t in tokens:
         keys = _token_keys(t)
@@ -424,21 +418,15 @@ def match_row_by_index(tokens: List[str]) -> Set[int]:
         if found:
             return found
 
-    # ---- 2) fallback "как раньше" (substring)
-    # собираем строку запроса целиком
+    # 2) fallback "как раньше"
     q = _clean_query(" ".join([str(t) for t in tokens]))
-    if not q:
-        return set()
-
-    # если запрос короткий (1-2 символа) — не долбим таблицу
-    if len(q) < 2:
+    if not q or len(q) < 2:
         return set()
 
     hits: Set[int] = set()
     for i, blob in _row_blob.items():
         if q in blob:
             hits.add(i)
-
     return hits
 
 
@@ -561,3 +549,4 @@ def initial_load():
 async def initial_load_async():
     await asyncio_to_thread(ensure_fresh_data, True)
     await asyncio_to_thread(ensure_fresh_users, True)
+
