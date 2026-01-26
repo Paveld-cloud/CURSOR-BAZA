@@ -257,12 +257,22 @@ def ensure_fresh_data(force: bool = False):
 
 
 async def find_image_by_code_async(code: str) -> str:
+    """
+    Только код -> ссылка из столбца image.
+    Никаких угадываний по имени файла.
+    """
     ensure_fresh_data()
+    if not code:
+        return ""
+
     key = _norm_code(code)
     if not key:
         return ""
-    return _image_by_code.get(key, "") or ""
 
+    url = _image_index.get(key, "")
+    if not url:
+        logger.info(f"[image] нет ссылки для кода: {key}")
+    return url or ""
 
 def normalize_drive_url(url: str) -> str:
     m = re.search(r"drive\.google\.com/(?:file/d/([-\w]{20,})|open\?id=([-\w]{20,}))", str(url or ""))
