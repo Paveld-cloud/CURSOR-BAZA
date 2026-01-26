@@ -1,10 +1,6 @@
 import logging
 from pathlib import Path
 from aiohttp import web
-import re
-from typing import List, Set
-
-import pandas as pd
 
 import app.data as data
 
@@ -29,81 +25,42 @@ async def api_health(request: web.Request):
 
 
 # ---------------- Helpers ----------------
-def _norm_code_strict(x: str) -> str:
+def _norm_code(s: str) -> str:
+    return str(s or "").strip()
+
+
+async def _resolve_image_for_code(code: str) -> str:
     """
-    Нормализация кода:
-    UZ000346 -> uz000346
-    PI-8808 -> pi8808
-    O->0
+    СТРОГО по твоей логике:
+    1) берём код
+    2) ищем ссылку по коду (в колонке image, где имя файла содержит этот же код)
+    3) резолвим до прямой ссылки (ibb/drive и т.п.)
     """
-    s = str(x or "").strip().lower()
-    s = s.replace("o", "0")
-    s = re.sub(r"[^a-z0-9]", "", s)
-    return s
-
-
-def _normalize_text(x: str) -> str:
-    # для токенизации поиска
-    return re.sub(r"[^\w\s]", " ", str(x or "").lower(), flags=re.U).strip()
-
-
-def _squash(x: str) -> str:
-    # “склеенный” фолбэк (без пробелов и символов)
-    return re.sub(r"[\W_]+", "", str(x or "").lower(), flags=re.U)
-
-
-def _ensure_loaded() -> bool:
-    try:
-        if getattr(data, "df", None) is None:
-            data.ensure_fresh_data(force=True)
-        return getattr(data, "df", None) is not None
-    except Exception as e:
-        logger.exception(f"data load failed: {e}")
-        return False
-
-
-def _safe_series(df_: pd.DataFrame, col: str) -> pd.Series:
-    if col not in df_.columns:
-        return pd.Series(["" for _ in range(len(df_))], index=df_.index, dtype="string")
-    s = df_[col].astype(str)
-    return s.fillna("").astype("string")
-
-
-async def _resolve_image_for_code(code: str, row: dict | None = None) -> str:
-    """
-    Строго под твой SAP-лист:
-    1) СНАЧАЛА берём ссылку из строки: row['image'] (колонка K).
-    2) Если пусто — fallback: data.find_image_by_code_async(code) (индекс код->image).
-    3) Приводим к прямой ссылке через data.resolve_image_url_async (ibb/drive и т.п.).
-    """
-    code_key = _norm_code_strict(code)
-    if not code_key:
+    code = _norm_code(code)
+    if not code:
         return ""
 
     raw = ""
-    if row:
-        raw = str(row.get("image") or row.get("image_url") or "").strip()
-
-    if not raw:
-        try:
-            raw = await data.find_image_by_code_async(code_key)
-        except Exception as e:
-            logger.warning(f"[image] find_image_by_code_async failed for {code_key}: {e}")
-            raw = ""
+    try:
+        raw = await data.find_image_by_code_async(code)
+    except Exception as e:
+        logger.warning(f"[image] find_image_by_code_async failed for {code}: {e}")
+        raw = ""
 
     if not raw:
         return ""
 
     try:
-        return (await data.resolve_image_url_async(raw)) or ""
+        url = await data.resolve_image_url_async(raw)
+        return url or ""
     except Exception as e:
-        logger.warning(f"[image] resolve_image_url_async failed for {code_key}: {e}")
+        logger.warning(f"[image] resolve_image_url_async failed for {code}: {e}")
         return ""
 
 
 async def _row_public(row: dict) -> dict:
     code = str(row.get("код", "")).strip()
-    image_url = await _resolve_image_for_code(code, row=row)
+    image_url = await _resolve_image_for_code(code)
 
     return {
         "код": code,
@@ -117,18 +74,19 @@ async def _row_public(row: dict) -> dict:
         "валюта": str(row.get("валюта", "")).strip(),
         "oem": str(row.get("oem", "")).strip(),
 
-        # и сырьё, и итоговый url
+        # отдаём raw и итоговую ссылку
         "image": str(row.get("image", "")).strip(),
         "image_url": image_url,
     }
 
 
-def _search_rows(query: str) -> List[dict]:
-    """
-    Поиск:
-    1) data.match_row_by_index (быстро)
-    2) fallback по “склеенному” по ВСЕМ колонкам (кроме image)
-    """
+def _ensure_loaded():
+    if data.df is None:
+        data.ensure_fresh_data(force=True)
+    return data.df is not None
+
+
+def _search_rows(query: str):
     q = (query or "").strip()
     if not q:
         return []
@@ -138,11 +96,11 @@ def _search_rows(query: str) -> List[dict]:
 
     df_ = data.df
 
-    tokens = _normalize_text(q).split()
-    q_squash = _squash(q)
-    norm_code = _norm_code_strict(q)
+    tokens = data.normalize(q).split()
+    q_squash = data.squash(q)
+    norm_code = data._norm_code(q)
 
-    matched: Set[int] = set()
+    matched = set()
 
     # 1) индексный поиск
     try:
@@ -153,15 +111,20 @@ def _search_rows(query: str) -> List[dict]:
     except Exception:
         matched = set()
 
-    # 2) fallback по “склеенному”
+    # 2) фолбэк по “склеенному”
     if not matched and q_squash:
         try:
+            import re
+            import pandas as pd
+
             mask_any = pd.Series(False, index=df_.index)
-            cols = [c for c in df_.columns if str(c).strip().lower() != "image"]
-            for col in cols:
-                series = _safe_series(df_, col)
+            for col in ["тип", "наименование", "код", "oem", "изготовитель", "парт номер", "oem парт номер"]:
+                series = data._safe_col(df_, col)
+                if series is None:
+                    continue
                 series_sq = series.str.replace(r"[\W_]+", "", regex=True)
                 mask_any |= series_sq.str.contains(re.escape(q_squash), na=False)
+
             matched = set(df_.index[mask_any])
         except Exception:
             matched = set()
@@ -182,7 +145,10 @@ async def api_search(request: web.Request):
 
     try:
         rows = _search_rows(q)
-        items = [await _row_public(r) for r in rows]
+        items = []
+        for r in rows:
+            items.append(await _row_public(r))
+
         return web.json_response({
             "ok": True,
             "q": q,
@@ -196,23 +162,16 @@ async def api_search(request: web.Request):
 
 
 async def api_item(request: web.Request):
-    """
-    Детальная карточка по коду (для страницы /item).
-    """
-    code_in = request.query.get("code", "")
-    code_key = _norm_code_strict(code_in)
-    if not code_key:
+    code = _norm_code(request.query.get("code", ""))
+    if not code:
         return web.json_response({"ok": False, "error": "code is required"}, status=400)
 
     if not _ensure_loaded():
         return web.json_response({"ok": False, "error": "data not loaded"}, status=500)
 
     try:
-        if "код" not in data.df.columns:
-            return web.json_response({"ok": False, "error": "column 'код' missing"}, status=500)
-
-        hit = data.df[data.df["код"].astype(str).map(_norm_code_strict) == code_key]
-        if hit.empty:
+        hit = data.df[data.df["код"].astype(str).str.lower() == code.lower()] if "код" in data.df.columns else None
+        if hit is None or hit.empty:
             return web.json_response({"ok": False, "error": "not found"}, status=404)
 
         row = hit.iloc[0].to_dict()
@@ -241,11 +200,11 @@ async def api_issue(request: web.Request):
 
     user_id = int(payload.get("user_id") or 0)
     name = str(payload.get("name") or "").strip()
-    code_key = _norm_code_strict(payload.get("code"))
+    code = _norm_code(payload.get("code"))
     qty = str(payload.get("qty") or "").strip()
     comment = str(payload.get("comment") or "").strip()
 
-    if not code_key:
+    if not code:
         return web.json_response({"ok": False, "error": "code is required"}, status=400)
     if not qty:
         return web.json_response({"ok": False, "error": "qty is required"}, status=400)
@@ -257,7 +216,7 @@ async def api_issue(request: web.Request):
     part = None
     try:
         if "код" in data.df.columns:
-            hit = data.df[data.df["код"].astype(str).map(_norm_code_strict) == code_key]
+            hit = data.df[data.df["код"].astype(str).str.lower() == code.lower()]
             if not hit.empty:
                 part = hit.iloc[0].to_dict()
     except Exception:
@@ -311,7 +270,7 @@ def build_web_app() -> web.Application:
     app.router.add_get("/app/", page_index)
     app.router.add_get("/app/item", page_item)
 
-    # Aliases
+    # Алиасы
     app.router.add_get("/", page_index)
     app.router.add_get("/item", page_item)
 
