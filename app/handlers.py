@@ -322,9 +322,16 @@ async def send_row_with_image(update: Update, row: dict, text: str):
     bot = update.get_bot()
     chat_id = update.effective_chat.id
 
-    url_raw = await data.find_image_by_code_async(code)
+    # ВАЖНО: фото берём в первую очередь из строки (колонка K: image).
+    # Это гарантирует соответствие "код -> ссылка" как в Google Sheets.
+    url_raw = str(row.get("image") or row.get("image_url") or "").strip()
+
+    # Если в строке нет ссылки — используем резервный поиск по коду.
     if not url_raw:
-        logger.info(f"[image] нет записи в индексе для кода: {code}")
+        url_raw = await data.find_image_by_code_async(code)
+
+    if not url_raw:
+        logger.info(f"[image] нет ссылки для кода: {code}")
         return await _safe_send_html_message(
             bot,
             chat_id,
@@ -364,9 +371,16 @@ async def send_row_with_image_bot(bot, chat_id: int, row: dict, text: str):
         [[InlineKeyboardButton("📦 Взять деталь", callback_data=f"issue:{code}")]]
     )
 
-    url_raw = await data.find_image_by_code_async(code)
+    # ВАЖНО: фото берём в первую очередь из строки (колонка K: image).
+    # Это гарантирует соответствие "код -> ссылка" как в Google Sheets.
+    url_raw = str(row.get("image") or row.get("image_url") or "").strip()
+
+    # Если в строке нет ссылки — используем резервный поиск по коду.
     if not url_raw:
-        logger.info(f"[image] нет записи в индексе для кода: {code}")
+        url_raw = await data.find_image_by_code_async(code)
+
+    if not url_raw:
+        logger.info(f"[image] нет ссылки для кода: {code}")
         return await _safe_send_html_message(
             bot,
             chat_id,
@@ -1044,3 +1058,4 @@ def register_handlers(app):
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, search_text), group=1
     )
+
