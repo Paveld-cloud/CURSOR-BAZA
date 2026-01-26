@@ -1,6 +1,8 @@
 const tg = window.Telegram?.WebApp;
 if (tg) {
   tg.expand();
+  tg.setHeaderColor('#121212');
+  tg.setBackgroundColor('#0b1220');
   tg.ready();
 }
 
@@ -52,19 +54,55 @@ function getCodeFromUrl() {
   return (u.searchParams.get("code") || "").trim().toLowerCase();
 }
 
+/**
+ * Убираем HTML-теги из текста, чтобы не видеть "<b>...</b>".
+ * Поддержка: <br> -> \n, остальное режем.
+ */
+function stripHtml(html) {
+  let s = String(html ?? "");
+  if (!s) return "";
+
+  // normalize breaks
+  s = s.replace(/<\s*br\s*\/?\s*>/gi, "\n");
+
+  // remove tags
+  s = s.replace(/<[^>]+>/g, "");
+
+  // decode minimum entities (достаточно для наших случаев)
+  s = s
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+
+  // cleanup
+  s = s.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  return s;
+}
+
 let CURRENT = { code: "", item: null };
 
 function renderItem(item) {
   const name = item["наименование"] || "Без наименования";
   const type = item["тип"] || "—";
-  const pn = item["парт номер"] || "—";
-  const oem = item["oem парт номер"] || item["oem"] || "—";
-  const qty = item["количество"] || "—";
+  const pn = item["парт номер"] || item["part_number"] || "—";
+
+  // OEM: берём один раз, без дублей
+  const oem = item["oem парт номер"] || item["OEM парт номер"] || item["oem"] || "—";
+
+  const qty = item["количество"] ?? item["остаток"] ?? "—";
   const price = item["цена"] || "—";
   const cur = item["валюта"] || "";
-  const mfg = item["изготовитель"] || "—";
+  const mfg = item["изготовитель"] || item["manufacturer"] || "—";
 
-  const text = (item.text || "").trim();
+  // ВАЖНО:
+  // item.text часто приходит в HTML (<b>..</b>), поэтому:
+  // - либо игнорируем, либо чистим.
+  const cleanedText = stripHtml(item.text || "");
+  // Если текст пустой после очистки — не показываем блок.
+  const extraBlock = cleanedText
+    ? `<div class="pre">${esc(cleanedText)}</div>`
+    : "";
 
   box.innerHTML = `
     <div class="item">
@@ -80,7 +118,7 @@ function renderItem(item) {
           <div><b>Изготовитель:</b> ${esc(mfg)}</div>
         </div>
 
-        ${text ? `<div class="pre" style="margin-top:10px;">${esc(text)}</div>` : ""}
+        ${extraBlock}
       </div>
     </div>
   `;
@@ -107,20 +145,17 @@ async function loadItem() {
   }
 
   codeLine.textContent = `Код: ${code}`;
-  if (envPill) envPill.textContent = "Загрузка…";
+  if (envPill) envPill.textContent = "Сеть";
   setStatus("Загружаю карточку…", "muted");
   box.innerHTML = "";
   photoWrap.style.display = "none";
   issueBtn.disabled = true;
 
-  // backend отдаёт: { ok:true, item:{...} }
-  // используем /app/api/item (есть алиас /api/item, но так логичнее)
+  // унифицированный путь
   const res = await fetch(`/app/api/item?code=${encodeURIComponent(code)}&user_id=${encodeURIComponent(userId())}`, {
     cache: "no-store"
   });
   const data = await safeJson(res);
-
-  if (envPill) envPill.textContent = "Online";
 
   if (!res.ok || !data || !data.ok) {
     setStatus(data?.error || `Ошибка загрузки (${res.status})`, "error");
@@ -169,7 +204,6 @@ issueBtn.addEventListener("click", async () => {
     comment: comment
   };
 
-  // у нас есть и /app/api/issue и /api/issue; используем /app/api/issue
   const res = await fetch("/app/api/issue", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
