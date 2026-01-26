@@ -1,6 +1,5 @@
-from pathlib import Path
-
-data_py = r'''# app/data.py
+bash -lc cat > /mnt/data/data.py <<'EOF'
+# app/data.py
 import os
 import io
 import re
@@ -85,41 +84,47 @@ def _norm_code(x: str) -> str:
     s = re.sub(r"[^a-z0-9]", "", s)
     return s
 
+
 def normalize(text: str) -> str:
     """для webapp: нормализация текста в токены"""
     return re.sub(r"[^\w\s]+", " ", str(text or "").lower(), flags=re.U).strip()
 
+
 def squash(text: str) -> str:
     """для webapp: склейка без пробелов/символов"""
     return re.sub(r"[\W_]+", "", str(text or "").lower(), flags=re.U)
+
 
 def _safe_col(df_: pd.DataFrame, col: str) -> Optional[pd.Series]:
     if df_ is None or col not in df_.columns:
         return None
     return df_[col].astype(str).fillna("").str.strip().str.lower()
 
+
 def now_local_str() -> str:
     tz = ZoneInfo(TIMEZONE if TIMEZONE else "Asia/Tashkent")
     return datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
 
+
 def val(row: dict, key: str, default: str = "") -> str:
     return str(row.get(key, default) or default)
+
 
 # ---------------- Formatting (card) ----------------
 def format_row(row: dict) -> str:
     """
     Компактная карточка (HTML) под Telegram/mini app.
     """
-    code        = val(row, "код").upper()
-    name        = val(row, "наименование")
-    type_       = val(row, "тип")
-    part_no     = val(row, "парт номер")
-    oem_part    = val(row, "oem парт номер")
-    qty         = val(row, "количество") or "—"
-    price       = val(row, "цена")
-    currency    = val(row, "валюта")
-    manuf       = val(row, "изготовитель")
-    oem         = val(row, "oem")
+    code = val(row, "код").upper()
+    name = val(row, "наименование")
+    type_ = val(row, "тип")
+    part_no = val(row, "парт номер")
+    oem_part = val(row, "oem парт номер")
+    qty = val(row, "количество") or "—"
+    price = val(row, "цена")
+    currency = val(row, "валюта")
+    manuf = val(row, "изготовитель")
+    oem = val(row, "oem")
 
     lines: List[str] = []
     if code:
@@ -142,6 +147,7 @@ def format_row(row: dict) -> str:
 
     return "\n".join(lines)
 
+
 # ---------------- Google Sheets client ----------------
 def get_gs_client():
     if not GOOGLE_APPLICATION_CREDENTIALS_JSON:
@@ -155,6 +161,7 @@ def get_gs_client():
         creds = Credentials.from_service_account_file(GOOGLE_APPLICATION_CREDENTIALS_JSON, scopes=SCOPES)
 
     return gspread.authorize(creds)
+
 
 # ---------------- Load SAP dataframe ----------------
 def _load_sap_dataframe() -> pd.DataFrame:
@@ -187,8 +194,10 @@ def _load_sap_dataframe() -> pd.DataFrame:
 
     return new_df
 
+
 # ---------------- Index builders ----------------
 _ALLOWED_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
+
 
 def build_search_index(df_: pd.DataFrame) -> Dict[str, Set[int]]:
     """
@@ -221,6 +230,7 @@ def build_search_index(df_: pd.DataFrame) -> Dict[str, Set[int]]:
 
     return idx
 
+
 def build_image_index(df_: pd.DataFrame) -> Dict[str, str]:
     """
     Ускорение: norm(код) -> URL из КОЛОНКИ image (из той же строки).
@@ -242,9 +252,10 @@ def build_image_index(df_: pd.DataFrame) -> Dict[str, str]:
             out.setdefault(k, url)
     return out
 
+
 def build_image_file_index(df_: pd.DataFrame) -> Dict[str, str]:
     """
-    ГЛАВНЫЙ индекс фото (как ты требуешь):
+    ГЛАВНЫЙ индекс фото:
     ищем по ВСЕМ строкам столбца image совпадение имени файла.
 
     Пример:
@@ -272,6 +283,7 @@ def build_image_file_index(df_: pd.DataFrame) -> Dict[str, str]:
 
     return out
 
+
 # ---------------- Reload/TTL ----------------
 def ensure_fresh_data(force: bool = False):
     global df, _last_load_ts, _search_index, _image_index, _image_file_index
@@ -294,6 +306,7 @@ def ensure_fresh_data(force: bool = False):
         f"images_by_row={len(_image_index)} keys, images_by_filename={len(_image_file_index)} keys"
     )
 
+
 # ---------------- Strict image matching (by FULL COLUMN) ----------------
 def find_image_url_by_code_strict(code: str) -> str:
     """
@@ -310,14 +323,13 @@ def find_image_url_by_code_strict(code: str) -> str:
     if not code_raw:
         return ""
 
-    url = _image_file_index.get(code_raw.upper(), "")
-    return url or ""
+    return _image_file_index.get(code_raw.upper(), "") or ""
+
 
 async def find_image_by_code_async(code: str) -> str:
-    """
-    async wrapper для handlers/webapp.
-    """
+    """async wrapper для handlers/webapp"""
     return find_image_url_by_code_strict(code)
+
 
 # ---------------- URL resolve (ibb/drive) ----------------
 def normalize_drive_url(url: str) -> str:
@@ -331,6 +343,7 @@ def normalize_drive_url(url: str) -> str:
         return u
     file_id = m.group(1) or m.group(2)
     return f"https://drive.google.com/uc?export=download&id={file_id}"
+
 
 async def resolve_ibb_direct_async(url: str) -> str:
     """
@@ -355,22 +368,22 @@ async def resolve_ibb_direct_async(url: str) -> str:
         m = re.search(
             r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
             html,
-            re.I
+            re.I,
         )
         return m.group(1) if m else u
     except Exception as e:
         logger.warning(f"resolve_ibb_direct_async error: {e}")
         return u
 
+
 async def resolve_image_url_async(url_raw: str) -> str:
-    """
-    приводим к прямой ссылке
-    """
+    """приводим к прямой ссылке"""
     if not url_raw:
         return ""
     u = normalize_drive_url(url_raw)
     u = await resolve_ibb_direct_async(u)
     return u or ""
+
 
 # ---------------- Search core ----------------
 def match_row_by_index(tokens: List[str]) -> Set[int]:
@@ -408,6 +421,7 @@ def match_row_by_index(tokens: List[str]) -> Set[int]:
         found |= _search_index.get(k, set())
     return found
 
+
 # ---------------- Users sheet (allowed/admin/blocked) ----------------
 def _parse_int(x) -> Optional[int]:
     try:
@@ -415,6 +429,7 @@ def _parse_int(x) -> Optional[int]:
         return v if v > 0 else None
     except Exception:
         return None
+
 
 def _dedupe_headers(headers: List[str]) -> List[str]:
     seen: Dict[str, int] = {}
@@ -431,6 +446,7 @@ def _dedupe_headers(headers: List[str]) -> List[str]:
             out.append(f"{base}_{seen[base]}")
     return out
 
+
 def load_users_from_sheet() -> Tuple[Set[int], Set[int], Set[int]]:
     allowed: Set[int] = set()
     admins: Set[int] = set()
@@ -441,7 +457,6 @@ def load_users_from_sheet() -> Tuple[Set[int], Set[int], Set[int]]:
         sh = client.open_by_url(SPREADSHEET_URL)
         ws = sh.worksheet(USERS_SHEET_NAME)
     except Exception:
-        # нет листа — не блокируем никого
         return allowed, admins, blocked
 
     vals = ws.get_all_values()
@@ -463,21 +478,28 @@ def load_users_from_sheet() -> Tuple[Set[int], Set[int], Set[int]]:
 
         role = str(rec.get("role", "")).strip().lower()
         if role in ("admin", "админ"):
-            admins.add(uid); allowed.add(uid); continue
+            admins.add(uid)
+            allowed.add(uid)
+            continue
         if role in ("blocked", "ban", "заблокирован"):
-            blocked.add(uid); continue
+            blocked.add(uid)
+            continue
 
         if truthy(rec.get("blocked", "")):
-            blocked.add(uid); continue
+            blocked.add(uid)
+            continue
         if truthy(rec.get("admin", "")):
-            admins.add(uid); allowed.add(uid); continue
+            admins.add(uid)
+            allowed.add(uid)
+            continue
         if "allowed" in rec and truthy(rec.get("allowed", "")):
-            allowed.add(uid); continue
+            allowed.add(uid)
+            continue
 
-        # по умолчанию разрешаем
         allowed.add(uid)
 
     return allowed, admins, blocked
+
 
 # ---------------- Initial load ----------------
 def initial_load():
@@ -487,15 +509,21 @@ def initial_load():
         SHEET_ALLOWED.clear(); SHEET_ALLOWED.update(a)
         SHEET_ADMINS.clear(); SHEET_ADMINS.update(ad)
         SHEET_BLOCKED.clear(); SHEET_BLOCKED.update(b)
-        logger.info(f"✅ USERS reload: allowed={len(SHEET_ALLOWED)} admins={len(SHEET_ADMINS)} blocked={len(SHEET_BLOCKED)}")
+        logger.info(
+            f"✅ USERS reload: allowed={len(SHEET_ALLOWED)} admins={len(SHEET_ADMINS)} blocked={len(SHEET_BLOCKED)}"
+        )
     except Exception as e:
         logger.warning(f"USERS load failed: {e}")
 
+
 # async helper
 import asyncio
+
+
 async def asyncio_to_thread(func, *args, **kwargs):
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
+
 
 async def initial_load_async():
     await asyncio_to_thread(ensure_fresh_data, True)
@@ -504,10 +532,11 @@ async def initial_load_async():
         SHEET_ALLOWED.clear(); SHEET_ALLOWED.update(a)
         SHEET_ADMINS.clear(); SHEET_ADMINS.update(ad)
         SHEET_BLOCKED.clear(); SHEET_BLOCKED.update(b)
-        logger.info(f"✅ USERS reload: allowed={len(SHEET_ALLOWED)} admins={len(SHEET_ADMINS)} blocked={len(SHEET_BLOCKED)}")
+        logger.info(
+            f"✅ USERS reload: allowed={len(SHEET_ALLOWED)} admins={len(SHEET_ADMINS)} blocked={len(SHEET_BLOCKED)}"
+        )
     except Exception as e:
         logger.warning(f"USERS load failed: {e}")
-'''
-out_path = Path("/mnt/data/data.py")
-out_path.write_text(data_py, encoding="utf-8")
-str(out_path), out_path.stat().st_size
+EOF
+python -c "import pathlib; p=pathlib.Path('/mnt/data/data.py'); print(p, p.stat().st_size)"
+
