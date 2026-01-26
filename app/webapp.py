@@ -313,3 +313,5 @@ def build_web_app() -> web.Application:
     logger.info("Mini App mounted at /app (static: /static/* and /app/static/*)")
     return app
 
+
+
