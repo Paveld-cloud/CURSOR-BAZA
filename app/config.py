@@ -49,8 +49,3 @@ if _adm_env:
 # 1 = строго: фото только если код содержится в URL
 # 0 = мягко: код -> image из строки (как раньше)
 IMAGE_STRICT = _truthy(os.getenv("IMAGE_STRICT", "1"))
-
-# --- aliases for data.py compatibility ---
-SAP_SHEET_NAME = os.getenv("SAP_SHEET_NAME", SHEET_NAME)
-USERS_SHEET_NAME = os.getenv("USERS_SHEET_NAME", USERS_SHEET)
-SEARCH_COLUMNS = SEARCH_FIELDS
