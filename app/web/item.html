@@ -4,19 +4,22 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Описание — БАЗА MG</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260127_1" />
+  <link rel="stylesheet" href="/static/style.css?v=20260127_header1" />
 </head>
 <body>
-  <div class="app">
-    <header class="header">
-      <div class="brand">
-        <div class="brand__title">Описание</div>
-        <div class="brand__sub" id="codeLine">—</div>
+  <div class="appShell">
+
+    <header class="appTopbar">
+      <div class="appTopbar__left">
+        <div class="appTopbar__title">Описание</div>
+        <div class="appTopbar__subtitle" id="codeLine">—</div>
       </div>
-      <div class="pill" id="envPill">Online</div>
+      <div class="appTopbar__right">
+        <div id="envPill" class="pill">Online</div>
+      </div>
     </header>
 
-    <main class="main">
+    <main class="appMain">
       <section class="card">
         <div id="status" class="status"></div>
 
@@ -37,12 +40,13 @@
       </section>
     </main>
 
-    <footer class="footer">
-      <div class="footer__text">БАЗА MG • Деталь</div>
+    <footer class="appFooter">
+      <div class="appFooter__text">БАЗА MG</div>
     </footer>
+
   </div>
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="/static/item.js?v=20260127_1"></script>
+  <script src="/static/item.js?v=20260127_header1"></script>
 </body>
 </html>
