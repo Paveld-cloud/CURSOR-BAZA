@@ -205,3 +205,39 @@ body{
   border-radius: 12px;
   padding: 10px;
 }
+/* верхние кнопки (Искать/Очистить) */
+.btnRowTop{
+  display:flex;
+  gap:10px;
+  margin-top:10px;
+}
+.btnRowTop .btn{ flex:1; }
+
+/* контейнер фото */
+.itemPhoto{
+  width: 100%;
+  height: 190px;                 /* базовая высота */
+  background: rgba(0,0,0,.25);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+}
+
+@media (min-width: 420px){
+  .itemPhoto{ height: 220px; }
+}
+
+/* базовые правила для img */
+.photo{
+  width: 100%;
+  height: 100%;
+  display:block;
+}
+
+/* Автовыбор: классы ставит JS */
+.photo.fit-cover{ object-fit: cover; }
+.photo.fit-contain{
+  object-fit: contain;
+  background: #000;              /* чтобы поля выглядели нормально */
+}
