@@ -20,10 +20,15 @@
   --sat: env(safe-area-inset-top, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
 
-  /* Telegram top bar height (минимально, чтобы не раздувать) */
-  --tgbar: 0px;
+  /* GM Gold */
+  --gold: rgba(212,175,55,1);        /* #D4AF37 */
+  --goldSoft: rgba(212,175,55,.45);
+  --goldLine: rgba(212,175,55,.35);
 
-  --topInset: calc(var(--sat) + var(--tgbar));
+  /* header base (graphite) */
+  --hdrA: #121212;
+  --hdrB: #161616;
+  --hdrC: #1a1a1a;
 }
 
 *{ box-sizing:border-box; }
@@ -34,9 +39,9 @@ body{
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   color:var(--text);
   background:
-    radial-gradient(1200px 700px at 12% -10%, rgba(37,99,235,.38), transparent 55%),
-    radial-gradient(900px 600px at 110% 8%, rgba(16,185,129,.14), transparent 55%),
-    radial-gradient(800px 520px at 60% 110%, rgba(168,85,247,.10), transparent 55%),
+    radial-gradient(1200px 700px at 12% -10%, rgba(37,99,235,.32), transparent 55%),
+    radial-gradient(900px 600px at 110% 8%, rgba(16,185,129,.12), transparent 55%),
+    radial-gradient(800px 520px at 60% 110%, rgba(168,85,247,.08), transparent 55%),
     var(--bg);
 }
 
@@ -50,95 +55,78 @@ body{
 }
 
 /* =========================
-   Compact topbar (GM-style)
+   Topbar (GM Gold + Graphite)
 ========================= */
 .appTopbar{
   position: sticky;
   top: 0;
   z-index: 50;
 
-  /* только safe-area, без искусственного tgbar */
-  padding-top: var(--topInset);
-  padding-bottom: 8px;
-  padding-left: 0;
-  padding-right: 0;
+  /* только safe-area, Telegram свою панель рисует сам */
+  padding-top: var(--sat);
+  padding-bottom: 10px;
 
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap: 10px;
 
-  /* без большого стекла: аккуратно и плоско */
-  background: rgba(11,18,32,.82);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background:
+    linear-gradient(180deg, var(--hdrA) 0%, var(--hdrB) 55%, var(--hdrC) 100%);
 
-  border-bottom: 1px solid rgba(255,255,255,.10);
+  border-bottom: 1px solid var(--goldLine);
+  box-shadow: 0 10px 26px rgba(0,0,0,.40);
 }
 
-/* тонкая подсветка сверху */
+/* мягкое свечение + тонкая золотая линия */
 .appTopbar::before{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:0;
+  height:2px;
+
+  background: linear-gradient(90deg, transparent, rgba(212,175,55,.85), transparent);
+  box-shadow: 0 0 10px rgba(212,175,55,.45);
+  pointer-events:none;
+}
+
+/* лёгкий свет сверху (не синий) */
+.appTopbar::after{
   content:"";
   position:absolute;
   left:0; right:0; top:0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(37,99,235,.55), transparent);
-  opacity: .6;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.14), transparent);
+  opacity:.75;
   pointer-events:none;
 }
 
 .appTopbar__left{ min-width: 0; }
+.appTopbar__right{ display:flex; align-items:center; justify-content:flex-end; }
+
 .appTopbar__title{
   font-size: 16px;
   font-weight: 950;
-  letter-spacing: .2px;
+  letter-spacing: .30px;
   line-height: 1.1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
 .appTopbar__subtitle{
   margin-top: 4px;
   font-size: 12px;
-  color: rgba(255,255,255,.68);
+  color: rgba(255,255,255,.66);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.appTopbar__right{
-  display:flex;
-  align-items:center;
-  justify-content:flex-end;
-}
-
-/* Status badge (аккуратно вместо "Online") */
-.pill{
-  display:inline-flex;
-  align-items:center;
-  gap: 6px;
-  font-size: 12px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,.14);
-  background: rgba(255,255,255,.06);
-  color: rgba(255,255,255,.86);
-  box-shadow: 0 6px 14px rgba(0,0,0,.18);
-  white-space: nowrap;
-}
-.pill::before{
-  content:"";
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(34,197,94,.95); /* зелёная точка */
-  box-shadow: 0 0 0 3px rgba(34,197,94,.16);
-}
-
-/* основной контент */
 .appMain{ padding-top: 12px; }
 
-/* футер минимальный */
 .appFooter{
   margin-top: 14px;
   padding: 10px 2px;
@@ -146,6 +134,33 @@ body{
   font-size: 12px;
 }
 .appFooter__text{ }
+
+/* =========================
+   Status badge (Online)
+========================= */
+.pill{
+  display:inline-flex;
+  align-items:center;
+  gap: 7px;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+
+  background: rgba(255,255,255,.06);
+  border: 1px solid var(--goldSoft);
+
+  color: rgba(255,255,255,.92);
+  box-shadow: 0 8px 18px rgba(0,0,0,.22);
+  white-space: nowrap;
+}
+.pill::before{
+  content:"";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34,197,94,.60);
+}
 
 /* =========================
    Glass panels / cards
@@ -170,7 +185,7 @@ body{
   inset:0;
   background:
     radial-gradient(700px 240px at 20% 0%, rgba(255,255,255,.09), transparent 60%),
-    radial-gradient(460px 220px at 90% 0%, rgba(37,99,235,.14), transparent 55%);
+    radial-gradient(460px 220px at 90% 0%, rgba(212,175,55,.10), transparent 55%);
   pointer-events:none;
 }
 
@@ -194,9 +209,9 @@ body{
   box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
 }
 .input:focus{
-  border-color: rgba(37,99,235,.55);
+  border-color: rgba(212,175,55,.55);
   box-shadow:
-    0 0 0 4px rgba(37,99,235,.18),
+    0 0 0 4px rgba(212,175,55,.16),
     inset 0 1px 0 rgba(255,255,255,.05);
 }
 
@@ -273,7 +288,9 @@ body{
   .list{ grid-template-columns: 1fr 1fr; }
 }
 
-/* result card */
+/* =========================
+   Result card
+========================= */
 .item{
   position: relative;
   border-radius: 20px;
@@ -282,6 +299,7 @@ body{
   background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
   box-shadow: var(--shadow2);
 }
+
 .itemPhoto{
   position: relative;
   width: 100%;
@@ -296,6 +314,7 @@ body{
 @media (min-width: 420px){
   .itemPhoto{ height: 260px; }
 }
+
 .photo{
   width: 100%;
   height: 100%;
@@ -307,6 +326,7 @@ body{
   box-shadow: 0 14px 28px rgba(0,0,0,.35);
 }
 .photo.fit-cover{ object-fit: cover; }
+
 .noPhoto{
   color: rgba(255,255,255,.65);
   font-size: 16px;
@@ -317,6 +337,7 @@ body{
 }
 
 .itemBody{ padding: 12px 12px 14px; }
+
 .codeLine{
   display:flex;
   align-items:center;
@@ -336,6 +357,7 @@ body{
   font-size: 13px;
   letter-spacing: .15px;
 }
+
 .title{
   font-size: 15px;
   font-weight: 900;
@@ -364,7 +386,9 @@ body{
 }
 .btnRow .btn{ flex:1; }
 
-/* detail page */
+/* =========================
+   Detail page
+========================= */
 .photoWrap{ margin-top: 10px; }
 .box{ margin-top: 10px; }
 .img{
