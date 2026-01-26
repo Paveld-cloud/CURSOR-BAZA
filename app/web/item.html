@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Описание — БАЗА MG</title>
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/style.css?v=20260127_1" />
 </head>
 <body>
   <div class="app">
@@ -20,18 +20,18 @@
       <section class="card">
         <div id="status" class="status"></div>
 
-        <div id="photoWrap" style="display:none; margin-top:10px;">
-          <img id="img" alt="Фото" style="width:100%; border-radius:14px; border:1px solid rgba(255,255,255,0.10);" />
+        <div id="photoWrap" class="photoWrap" style="display:none;">
+          <img id="img" class="img" alt="Фото" />
         </div>
 
-        <div id="box" style="margin-top:10px;"></div>
+        <div id="box" class="box"></div>
 
-        <div class="actions" style="margin-top:12px;">
+        <div class="actions">
           <button id="issue" class="btn">📦 Взять деталь</button>
           <button id="back" class="btn btn--ghost" type="button">Назад</button>
         </div>
 
-        <div class="hint" style="margin-top:10px;">
+        <div class="hint hint--mt">
           Списание попадёт в лист <b>История</b>. Количество и комментарий запросит приложение.
         </div>
       </section>
@@ -43,6 +43,6 @@
   </div>
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="/static/item.js"></script>
+  <script src="/static/item.js?v=20260127_1"></script>
 </body>
 </html>
