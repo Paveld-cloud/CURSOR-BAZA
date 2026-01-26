@@ -60,8 +60,12 @@ df: Optional[pd.DataFrame] = None
 _last_load_ts: float = 0.0
 
 _search_index: Dict[str, Set[int]] = {}
-_image_index: Dict[str, str] = {}
 _row_blob: Dict[int, str] = {}
+
+# ВАЖНО: теперь это код -> url
+_image_by_code: Dict[str, str] = {}
+# доп. индекс по имени файла (оставляем как резерв)
+_image_by_filename_token: Dict[str, str] = {}
 
 user_state: Dict[int, dict] = {}
 issue_state: Dict[int, dict] = {}
@@ -147,18 +151,11 @@ def _clean_query(q: str) -> str:
 
 
 def _get_search_cols(df_: pd.DataFrame) -> List[str]:
-    """
-    КЛЮЧЕВОЕ: поиск 'как раньше' — по всем релевантным колонкам.
-    Приоритет: SEARCH_COLUMNS, но если нужные значения в других колонках (PART NUMBER, PN и т.п.) — тоже ищем.
-    """
     all_cols = [str(c).strip().lower() for c in df_.columns]
-    # исключаем техническое
     all_cols = [c for c in all_cols if c and c not in {"image"}]
 
-    # приоритетные (если существуют)
     preferred = [c for c in SEARCH_COLUMNS if c in all_cols]
 
-    # добавим типовые “part/oem/номер” колонки по маскам (англ/рус)
     extra = []
     patt = re.compile(r"(part|pn|p\/n|oem|номер|part\s*no|material|код|code)", re.I)
     for c in all_cols:
@@ -167,7 +164,6 @@ def _get_search_cols(df_: pd.DataFrame) -> List[str]:
         if patt.search(c):
             extra.append(c)
 
-    # итог: сначала preferred, затем extra, затем все остальные
     rest = [c for c in all_cols if c not in preferred and c not in extra]
     return preferred + extra + rest
 
@@ -238,16 +234,16 @@ def _load_sap_dataframe() -> pd.DataFrame:
     for c in new_df.columns:
         new_df[c] = new_df[c].astype(str).fillna("").map(lambda x: str(x).strip())
 
-    # нормализуем самые частые колонки, но поиск у нас теперь по всем — это не критично
+    # названия колонок -> lower
+    new_df.columns = [str(c).strip().lower() for c in new_df.columns]
+
+    # нормализуем ключевые поля (если есть)
     for col in ("код", "oem", "парт номер", "oem парт номер"):
         if col in new_df.columns:
             new_df[col] = new_df[col].astype(str).map(lambda x: str(x).strip().lower())
 
     if "image" in new_df.columns:
         new_df["image"] = new_df["image"].astype(str).map(lambda x: str(x).strip())
-
-    # важное: приводим названия колонок к lower() (для стабильного доступа)
-    new_df.columns = [str(c).strip().lower() for c in new_df.columns]
 
     return new_df
 
@@ -264,12 +260,10 @@ def build_search_index(df_: pd.DataFrame) -> Dict[str, Set[int]]:
             if not raw:
                 continue
 
-            # code-like: всегда кладём norm_code — чтобы PI8808DRG500 матчился даже если с дефисами/пробелами
             norm = _norm_code(raw)
             if norm and len(norm) >= 3:
                 idx.setdefault(norm, set()).add(i)
 
-            # токены RU/EN/цифры
             for t in token_re.findall(raw):
                 key = _norm_str(t)
                 if key and len(key) >= 2:
@@ -291,29 +285,47 @@ def build_row_blob(df_: pd.DataFrame) -> Dict[int, str]:
     return blobs
 
 
-def build_image_index(df_: pd.DataFrame) -> Dict[str, str]:
-    index: Dict[str, str] = {}
+def build_image_indexes(df_: pd.DataFrame) -> Tuple[Dict[str, str], Dict[str, str]]:
+    """
+    1) PRIMARY: code -> image (строго по строке)
+    2) SECONDARY: tokens-from-filename -> image (резерв)
+    """
+    by_code: Dict[str, str] = {}
+    by_token: Dict[str, str] = {}
+
     if "image" not in df_.columns:
-        return index
+        return by_code, by_token
 
     skip = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
+
     for _, row in df_.iterrows():
         url = str(row.get("image", "")).strip()
         if not url:
             continue
+
+        # --- PRIMARY: код -> image
+        if "код" in df_.columns:
+            code_raw = str(row.get("код", "")).strip()
+            code_key = _norm_code(code_raw)
+            if code_key:
+                # первый непустой побеждает (стабильно)
+                by_code.setdefault(code_key, url)
+
+        # --- SECONDARY: по имени файла (резерв)
         tokens = _url_name_tokens(url)
         for t in tokens:
             if t in skip or len(t) < 3:
                 continue
-            index.setdefault(_norm_code(t), url)
+            by_token.setdefault(_norm_code(t), url)
         join = "".join(tokens)
         if join:
-            index.setdefault(_norm_code(join), url)
-    return index
+            by_token.setdefault(_norm_code(join), url)
+
+    return by_code, by_token
 
 
 def ensure_fresh_data(force: bool = False):
-    global df, _search_index, _image_index, _row_blob, _last_load_ts
+    global df, _search_index, _row_blob, _image_by_code, _image_by_filename_token, _last_load_ts
     need = force or df is None or (time.time() - _last_load_ts > DATA_TTL)
     if not need:
         return
@@ -322,15 +334,24 @@ def ensure_fresh_data(force: bool = False):
     df = new_df
     _search_index = build_search_index(df)
     _row_blob = build_row_blob(df)
-    _image_index = build_image_index(df)
+    _image_by_code, _image_by_filename_token = build_image_indexes(df)
     _last_load_ts = time.time()
+
     logger.info(
-        f"✅ SAP reload: {len(df)} rows, index={len(_search_index)} keys, blobs={len(_row_blob)}, images={len(_image_index)} keys"
+        f"✅ SAP reload: {len(df)} rows, index={len(_search_index)} keys, blobs={len(_row_blob)}, "
+        f"img_by_code={len(_image_by_code)}, img_by_name={len(_image_by_filename_token)}"
     )
 
 
 # ---------- Картинки ----------
 async def find_image_by_code_async(code: str) -> str:
+    """
+    ТВОЯ ЛОГИКА:
+    - всегда сначала ищем по коду: код -> image (из столбца image в той же строке)
+    - если пусто:
+        IMAGE_STRICT=1  -> ничего не возвращаем
+        IMAGE_STRICT=0  -> можно попробовать резерв по имени файла
+    """
     ensure_fresh_data()
     if not code:
         return ""
@@ -339,24 +360,17 @@ async def find_image_by_code_async(code: str) -> str:
     if not key:
         return ""
 
-    hit = _image_index.get(key)
-    if hit:
-        return hit
+    # PRIMARY: по коду (из строки)
+    url = _image_by_code.get(key)
+    if url:
+        return url
 
     if IMAGE_STRICT:
-        logger.info(f"[image][strict] нет совпадения по имени для кода: {key}")
         return ""
 
-    try:
-        if df is not None and "код" in df.columns and "image" in df.columns:
-            for _, r in df.iterrows():
-                if _norm_code(r.get("код", "")) == key:
-                    u = str(r.get("image", "")).strip()
-                    return u or ""
-    except Exception as e:
-        logger.warning(f"find_image_by_code_async soft fallback error: {e}")
-
-    return ""
+    # SECONDARY: по имени файла/токенам (резерв)
+    url = _image_by_filename_token.get(key, "")
+    return url or ""
 
 
 def normalize_drive_url(url: str) -> str:
@@ -574,4 +588,5 @@ def initial_load():
 async def initial_load_async():
     await asyncio_to_thread(ensure_fresh_data, True)
     await asyncio_to_thread(ensure_fresh_users, True)
+
 
