@@ -1,51 +1,81 @@
-# app/config.py
 import os
 
-def _truthy(x: str | None) -> bool:
-    if x is None:
-        return False
-    s = str(x).strip().lower()
-    return s in {"1", "true", "yes", "y", "да", "ok", "ок"} or (s.isdigit() and int(s) > 0)
+# =========================
+# Основные настройки бота
+# =========================
 
-# --- Бот / вебхук
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-WEBHOOK_URL = (os.getenv("WEBHOOK_URL", "") or "").rstrip("/")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "").strip()
+
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").rstrip("/")
 WEBHOOK_PATH = os.getenv("WEBHOOK_PATH", "/webhook")
-PORT = int(os.getenv("PORT", "8080"))
 WEBHOOK_SECRET_TOKEN = os.getenv("WEBHOOK_SECRET_TOKEN", "")
 
-# --- Google Sheets
-SPREADSHEET_URL = os.getenv("SPREADSHEET_URL", "")
-GOOGLE_APPLICATION_CREDENTIALS_JSON = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON", "{}")
-SHEET_NAME = os.getenv("SHEET_NAME", "").strip()
+PORT = int(os.getenv("PORT", "8080"))
 
-# --- Поведение бота
-TZ_NAME = os.getenv("TIMEZONE", "Asia/Tashkent")
-PAGE_SIZE = int(os.getenv("PAGE_SIZE", "5"))
-MAX_QTY = float(os.getenv("MAX_QTY", "1000"))
+# =========================
+# Google Sheets
+# =========================
 
-# --- Кеши
-DATA_TTL = int(os.getenv("DATA_TTL", "300"))
-USERS_TTL = int(os.getenv("USERS_TTL", "300"))
+# URL таблицы (обязательно)
+SPREADSHEET_URL = os.getenv("SPREADSHEET_URL", "").strip()
 
-# --- Поиск
-SEARCH_FIELDS = ["тип", "наименование", "код", "oem", "изготовитель"]
+# Названия листов
+SHEET_NAME = os.getenv("SHEET_NAME", "SAP")
+USERS_SHEET = os.getenv("USERS_SHEET", "Пользователи")
+HISTORY_SHEET = os.getenv("HISTORY_SHEET", "История")
 
-# --- Мультимедиа приветствия
-WELCOME_ANIMATION_URL = os.getenv("WELCOME_ANIMATION_URL", "").strip()
-WELCOME_PHOTO_URL = os.getenv("WELCOME_PHOTO_URL", "").strip()
-WELCOME_MEDIA_ID = os.getenv("WELCOME_MEDIA_ID", "").strip()
-SUPPORT_CONTACT = os.getenv("SUPPORT_CONTACT", "👨‍💻 Поддержка: @Paveldemen")
+# =========================
+# Поиск и данные
+# =========================
 
-# --- Админы (через ENV ADMINS="123,456")
-ADMINS = set()
-_adm_env = os.getenv("ADMINS", "")
-if _adm_env:
-    for p in _adm_env.replace(" ", "").split(","):
-        if p.isdigit():
-            ADMINS.add(int(p))
+# Колонки, участвующие в поиске
+SEARCH_FIELDS = [
+    "code",
+    "name",
+    "type",
+    "oem",
+    "part_number",
+    "manufacturer",
+    "description",
+]
 
-# --- Режим сопоставления фото
-# 1 = строго: фото только если код содержится в URL
-# 0 = мягко: код -> image из строки (как раньше)
-IMAGE_STRICT = _truthy(os.getenv("IMAGE_STRICT", "1"))
+# Размер страницы результатов
+PAGE_SIZE = int(os.getenv("PAGE_SIZE", "6"))
+
+# Максимальное количество списания
+MAX_QTY = int(os.getenv("MAX_QTY", "999"))
+
+# Время жизни кеша данных (сек)
+DATA_TTL = int(os.getenv("DATA_TTL", "600"))
+
+# =========================
+# Доступы и роли
+# =========================
+
+# Админы можно задать через env: 123,456
+ADMINS = {
+    int(x)
+    for x in os.getenv("ADMINS", "").split(",")
+    if x.strip().isdigit()
+}
+
+# =========================
+# Медиа и UI
+# =========================
+
+WELCOME_ANIMATION_URL = os.getenv("WELCOME_ANIMATION_URL", "")
+WELCOME_PHOTO_URL = os.getenv("WELCOME_PHOTO_URL", "")
+WELCOME_MEDIA_ID = os.getenv("WELCOME_MEDIA_ID", "")
+
+SUPPORT_CONTACT = os.getenv("SUPPORT_CONTACT", "@support")
+
+# =========================
+# ВАЖНО: алиасы для data.py
+# =========================
+# data.py ожидает именно эти имена
+# ничего не ломаем, просто синхронизируем
+
+SAP_SHEET_NAME = os.getenv("SAP_SHEET_NAME", SHEET_NAME)
+USERS_SHEET_NAME = os.getenv("USERS_SHEET_NAME", USERS_SHEET)
+
+SEARCH_COLUMNS = SEARCH_FIELDS
