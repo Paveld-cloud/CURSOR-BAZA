@@ -504,3 +504,4 @@ async def initial_load_async():
         logger.info(f"✅ USERS reload: allowed={len(SHEET_ALLOWED)} admins={len(SHEET_ADMINS)} blocked={len(SHEET_BLOCKED)}")
     except Exception as e:
         logger.warning(f"USERS load failed: {e}")
+
