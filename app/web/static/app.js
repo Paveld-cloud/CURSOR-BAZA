@@ -1,5 +1,3 @@
-// app/web/static/app.js  (ID под твой index.html: q, btn, clear, st, list, cnt)
-
 (function () {
   const $ = (id) => document.getElementById(id);
 
@@ -90,7 +88,7 @@
         ${(price || currency) ? `<div class="row"><span class="k">Цена:</span> <span class="v">${price} ${currency}</span></div>` : ""}
 
         <div class="actions">
-          <button class="btn primary" data-action="issue" data-code="${code}">📦 Взять</button>
+          <button class="btn primary" data-action="open" data-code="${code}">📦 Взять</button>
           <button class="btn ghost" data-action="open" data-code="${code}">ℹ️ Описание</button>
         </div>
       `;
@@ -109,6 +107,7 @@
       return;
     }
 
+    // ВАЖНО: чтобы ты видел, что клик реально сработал
     setStatus("Поиск…");
 
     const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || "";
@@ -127,15 +126,15 @@
       return;
     }
 
-    let data;
+    let dataJson;
     try {
-      data = await res.json();
+      dataJson = await res.json();
     } catch (e) {
       setStatus("Ошибка ответа (JSON)", true);
       return;
     }
 
-    const items = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
+    const items = Array.isArray(dataJson) ? dataJson : (Array.isArray(dataJson?.items) ? dataJson.items : []);
 
     if (!items.length) {
       renderEmpty("Ничего не найдено");
@@ -157,60 +156,54 @@
     const btn = $("btn");
     const clear = $("clear");
     const qEl = $("q");
+    const list = $("list");
 
-    // Маркер, что JS реально загрузился
+    // Показываем 2 секунды, чтобы точно заметил
     setStatus("JS OK");
+    setTimeout(() => {
+      if ($("st")?.textContent === "JS OK") setStatus("");
+    }, 2000);
 
     if (!btn || !clear || !qEl) {
       setStatus("JS: не найдены элементы (q/btn/clear)", true);
       return;
     }
 
+    // ДВОЙНОЕ привязывание: addEventListener + onclick
     btn.addEventListener("click", doSearch);
+    btn.onclick = doSearch;
+
     clear.addEventListener("click", clearAll);
-
-    // Делегирование кликов по кнопкам карточек
-    const list = $("list");
-    if (list) {
-      list.addEventListener("click", (e) => {
-        const el = e.target;
-        if (!el || !el.dataset) return;
-        const code = (el.dataset.code || "").trim();
-        const action = (el.dataset.action || "").trim();
-        if (!code || !action) return;
-
-        // Ведём на страницу /item (там и описание, и списание)
-        if (action === "open" || action === "issue") {
-          window.location.href = `/item?code=${encodeURIComponent(code)}`;
-        }
-      });
-    }
+    clear.onclick = clearAll;
 
     qEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter") doSearch();
     });
 
-    // Уберём "JS OK" через 1 секунду
-    setTimeout(() => {
-      if ($("st")?.textContent === "JS OK") setStatus("");
-    }, 1000);
+    // клики по карточкам (переход на /item)
+    if (list) {
+      list.addEventListener("click", (e) => {
+        const t = e.target;
+        if (!t || !t.dataset) return;
+        const code = (t.dataset.code || "").trim();
+        const act = (t.dataset.action || "").trim();
+        if (!code || !act) return;
+        window.location.href = `/item?code=${encodeURIComponent(code)}`;
+      });
+    }
+
+    // экспортируем наружу (fallback для onclick из HTML)
+    window.MG_DO_SEARCH = doSearch;
+    window.MG_CLEAR = clearAll;
   }
 
-  // Если скрипт подключился раньше DOM — ждём
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", bind);
   } else {
     bind();
   }
 
-  // Глобальный перехват ошибок
   window.addEventListener("error", (e) => {
     setStatus("JS ошибка: " + (e?.message || "unknown"), true);
   });
 })();
-
-  window.addEventListener("error", (e) => {
-    setStatus("JS ошибка: " + (e?.message || "unknown"), true);
-  });
-})();
-
