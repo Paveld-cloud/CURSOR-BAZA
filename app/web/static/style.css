@@ -1,6 +1,5 @@
 :root{
   --bg:#0b1220;
-  --card:#101a2e;
   --muted:#8aa0c6;
   --text:#e9f0ff;
   --line:rgba(255,255,255,.08);
@@ -11,21 +10,25 @@
 
 *{ box-sizing:border-box; }
 html,body{ height:100%; }
+
 body{
   margin:0;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-  background: radial-gradient(1200px 700px at 20% -10%, rgba(37,99,235,.35), transparent 55%),
-              radial-gradient(900px 600px at 110% 10%, rgba(16,185,129,.15), transparent 55%),
-              var(--bg);
+  background:
+    radial-gradient(1200px 700px at 20% -10%, rgba(37,99,235,.35), transparent 55%),
+    radial-gradient(900px 600px at 110% 10%, rgba(16,185,129,.15), transparent 55%),
+    var(--bg);
   color:var(--text);
 }
 
+/* =========================
+   Index layout (/app)
+========================= */
 .wrap{
   max-width: 980px;
   margin: 0 auto;
   padding: 14px 12px 28px;
 }
-
 .top{ margin: 6px 0 12px; }
 .h1{
   font-size: 20px;
@@ -38,6 +41,49 @@ body{
   color: var(--muted);
 }
 
+/* =========================
+   Mini App layout (item.html)
+========================= */
+.app{
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 14px 12px 28px;
+}
+.header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  margin: 6px 0 12px;
+}
+.brand__title{
+  font-size: 18px;
+  font-weight: 850;
+}
+.brand__sub{
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.pill{
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,.08);
+  color: rgba(255,255,255,.85);
+}
+.main{ }
+.footer{
+  margin-top: 14px;
+  color: rgba(255,255,255,.55);
+  font-size: 12px;
+}
+.footer__text{ }
+
+/* =========================
+   Base components
+========================= */
 .card{
   background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
   border: 1px solid var(--line);
@@ -78,23 +124,34 @@ body{
   border: 1px solid var(--line);
 }
 
+/* item.html uses btn--ghost */
+.btn.btn--ghost{
+  background: var(--btn2);
+  box-shadow: none;
+  border: 1px solid var(--line);
+}
+
 .status{
   margin-top: 10px;
   font-size: 13px;
   color: var(--muted);
 }
 
+/* =========================
+   Results grid (/app)
+========================= */
 .list{
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
 }
-
 @media (min-width: 700px){
   .list{ grid-template-columns: 1fr 1fr; }
 }
 
-/* ---------- Card item ---------- */
+/* =========================
+   Card item blocks
+========================= */
 .item{
   background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
   border: 1px solid var(--line);
@@ -103,7 +160,6 @@ body{
   overflow: hidden;
 }
 
-/* контейнер фото: даём нормальную высоту, фон, чтобы “contain” выглядел красиво */
 .itemPhoto{
   width: 100%;
   height: 220px;
@@ -113,18 +169,24 @@ body{
   align-items:center;
   justify-content:center;
   padding: 8px;
+  overflow:hidden;
 }
-
 @media (min-width: 420px){
   .itemPhoto{ height: 260px; }
 }
 
-/* ключевое: показываем фото ЦЕЛИКОМ */
 .photo{
   width: 100%;
   height: 100%;
-  object-fit: contain;
   display:block;
+  object-fit: contain; /* базово показываем целиком */
+}
+
+/* Автовыбор: классы ставит JS */
+.photo.fit-cover{ object-fit: cover; }
+.photo.fit-contain{
+  object-fit: contain;
+  background: #000;
 }
 
 .noPhoto{
@@ -181,13 +243,22 @@ body{
 }
 .btnRow .btn{ flex: 1; }
 
-/* ---------- item.html ---------- */
+/* =========================
+   item.html detail page
+========================= */
+.photoWrap{
+  margin-top: 10px;
+}
+.box{
+  margin-top: 10px;
+}
+
 .img{
   width:100%;
   max-height: 320px;
   object-fit: contain;
-  border-radius: 12px;
-  border: 1px solid var(--line);
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.10);
   background: rgba(0,0,0,.2);
   display:block;
   padding: 6px;
@@ -205,13 +276,23 @@ body{
   padding: 10px;
 }
 
+.actions{
+  display:flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+.actions .btn{ flex:1; }
+
+.hint{
+  font-size: 13px;
+  color: rgba(255,255,255,.70);
+}
+.hint--mt{ margin-top: 10px; }
+
+/* верхние кнопки (Искать/Очистить) */
 .btnRowTop{
   display:flex;
   gap:10px;
   margin-top:10px;
 }
 .btnRowTop .btn{ flex:1; }
-
-/* Фото: базово показываем целиком, при необходимости JS может переключить на cover */
-.photo{ object-fit: contain; }
-.photo.fit-cover{ object-fit: cover; }
