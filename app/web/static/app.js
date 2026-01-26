@@ -1,207 +1,198 @@
-(function () {
-  const $ = (id) => document.getElementById(id);
+// app/web/static/app.js
+const tg = window.Telegram?.WebApp;
+if (tg) tg.expand();
 
-  const tg = window.Telegram?.WebApp;
-  if (tg) {
-    try { tg.expand(); tg.ready(); } catch {}
-  }
+const q = document.getElementById("q");
+const btn = document.getElementById("btn");
+const st = document.getElementById("st");
+const list = document.getElementById("list");
+const clr = document.getElementById("clr");
 
-  function setStatus(text, isErr = false) {
-    const st = $("st");
-    if (!st) return;
-    st.textContent = text || "";
-    st.classList.toggle("err", !!isErr);
-  }
+function userId() { return tg?.initDataUnsafe?.user?.id || 0; }
+function userName() {
+  const u = tg?.initDataUnsafe?.user;
+  if (!u) return "";
+  const fn = (u.first_name || "").trim();
+  const ln = (u.last_name || "").trim();
+  return (fn + " " + ln).trim() || (u.username ? "@"+u.username : "");
+}
+function esc(s){
+  return String(s ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;");
+}
 
-  function escapeHtml(s) {
-    return String(s ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
-  }
+// Универсальные геттеры: поддержка it["код"], it.code, it.row["код"]
+function getRow(it){
+  return (it && typeof it === "object" && it.row && typeof it.row === "object") ? it.row : it;
+}
+function getVal(it, keyRu, keyEn){
+  const r = getRow(it) || {};
+  return (r[keyRu] ?? r[keyEn] ?? it?.[keyRu] ?? it?.[keyEn] ?? "");
+}
+function getCode(it){
+  return String(getVal(it, "код", "code") || "").trim();
+}
+function getName(it){
+  return String(getVal(it, "наименование", "name") || "").trim();
+}
+function getType(it){
+  return String(getVal(it, "тип", "type") || "").trim();
+}
+function getQty(it){
+  return String(getVal(it, "количество", "qty") || "").trim();
+}
+function getPrice(it){
+  return String(getVal(it, "цена", "price") || "").trim();
+}
+function getCurr(it){
+  return String(getVal(it, "валюта", "currency") || "").trim();
+}
+function getPart(it){
+  return String(getVal(it, "парт номер", "part_no") || "").trim();
+}
+function getOem(it){
+  return String(getVal(it, "oem парт номер", "oem_part_no") || getVal(it, "oem", "oem") || "").trim();
+}
+function getImg(it){
+  // поддержка image_url / image / row.image / row.image_url
+  const r = getRow(it) || {};
+  return String(r["image_url"] ?? r["image"] ?? it?.image_url ?? it?.image ?? "").trim();
+}
 
-  function renderEmpty(msg = "") {
-    const cnt = $("cnt");
-    const list = $("list");
-    if (cnt) cnt.textContent = "";
-    if (list) list.innerHTML = "";
-    if (msg) setStatus(msg, false);
-  }
+async function doSearch(){
+  const text = (q.value||"").trim();
+  if(!text){ st.textContent="Введите запрос"; return; }
 
-  function renderCards(items) {
-    const cnt = $("cnt");
-    const list = $("list");
-    if (cnt) cnt.textContent = `Найдено: ${items.length}`;
-    if (!list) return;
+  st.textContent="Ищу...";
+  list.innerHTML="";
 
-    list.innerHTML = "";
+  try{
+    const url = `/api/search?q=${encodeURIComponent(text)}&user_id=${encodeURIComponent(userId())}`;
+    const res = await fetch(url);
+    const data = await res.json().catch(()=> ({}));
 
-    items.forEach((item) => {
-      const code = escapeHtml(item.code || "");
-      const name = escapeHtml(item.name || "");
-      const type = escapeHtml(item.type || "");
-      const part = escapeHtml(item.part || "");
-      const oem = escapeHtml(item.oem || "");
-      const qty = escapeHtml(item.qty || "");
-      const price = escapeHtml(item.price || "");
-      const currency = escapeHtml(item.currency || "");
-      const image = item.image || "";
+    if(!res.ok || !data.ok){
+      st.textContent = `Ошибка поиска (${res.status || 0})`;
+      list.innerHTML = `<div class="item">Ошибка поиска. Проверь соединение/сервер.</div>`;
+      return;
+    }
 
-      const card = document.createElement("div");
-      card.className = "card";
+    const items = data.items || [];
+    st.textContent = `Найдено: ${items.length}`;
 
-      if (image) {
-        const img = document.createElement("img");
-        img.className = "img";
-        img.src = image;
-        img.alt = "Фото";
-        img.onerror = () => {
-          img.remove();
-          const no = document.createElement("div");
-          no.className = "no-photo";
-          no.textContent = "без фото";
-          card.prepend(no);
-        };
-        card.appendChild(img);
-      } else {
-        const no = document.createElement("div");
-        no.className = "no-photo";
-        no.textContent = "без фото";
-        card.appendChild(no);
-      }
+    if(!items.length){
+      list.innerHTML = `<div class="item">Ничего не найдено</div>`;
+      return;
+    }
 
-      const body = document.createElement("div");
-      body.className = "card-body";
-      body.innerHTML = `
-        <div class="pill-row">
-          <div class="pill">Код <b>${code}</b></div>
-          <div class="pill green">Остаток <b>${qty}</b></div>
-        </div>
+    for(const it of items){
+      const code = getCode(it);
+      const codeLower = code.toLowerCase();
+      const name = getName(it);
+      const type = getType(it);
+      const qty = getQty(it);
+      const price = getPrice(it);
+      const curr = getCurr(it);
+      const part = getPart(it);
+      const oem = getOem(it);
+      const img = getImg(it);
 
-        <div class="title">${name}</div>
+      // ВАЖНО: отдельная строка "Код: ...." — как ты просишь
+      const html = `
+        <div class="item">
+          <div class="itemPhoto">
+            ${
+              img
+                ? `<img class="photo" src="${esc(img)}" alt="Фото" loading="lazy" />`
+                : `<div class="noPhoto">без фото</div>`
+            }
+          </div>
 
-        ${type ? `<div class="row"><span class="k">Тип:</span> <span class="v">${type}</span></div>` : ""}
-        ${part ? `<div class="row"><span class="k">Part №:</span> <span class="v">${part}</span></div>` : ""}
-        ${oem ? `<div class="row"><span class="k">OEM:</span> <span class="v">${oem}</span></div>` : ""}
-        ${(price || currency) ? `<div class="row"><span class="k">Цена:</span> <span class="v">${price} ${currency}</span></div>` : ""}
+          <div class="itemBody">
+            <div class="codeLine">Код: <b>${esc(code)}</b> &nbsp; • &nbsp; Остаток: <b>${esc(qty)}</b></div>
 
-        <div class="actions">
-          <button class="btn primary" data-action="open" data-code="${code}">📦 Взять</button>
-          <button class="btn ghost" data-action="open" data-code="${code}">ℹ️ Описание</button>
+            <div class="title">${esc(name)}</div>
+
+            <div class="meta">
+              <div><b>Тип:</b> ${esc(type)}</div>
+              <div><b>Part №:</b> ${esc(part)}</div>
+              <div><b>OEM:</b> ${esc(oem)}</div>
+              <div><b>Цена:</b> ${esc(price)} ${esc(curr)}</div>
+            </div>
+
+            <div class="btnRow">
+              <button class="btn" data-issue="${esc(codeLower)}">📦 Взять</button>
+              <button class="btn ghost" data-info="${esc(codeLower)}">ℹ️ Описание</button>
+            </div>
+          </div>
         </div>
       `;
-      card.appendChild(body);
 
-      list.appendChild(card);
-    });
-  }
-
-  async function doSearch() {
-    const qEl = $("q");
-    const q = (qEl?.value || "").trim();
-
-    if (!q) {
-      renderEmpty("Введите запрос");
-      return;
+      list.insertAdjacentHTML("beforeend", html);
     }
 
-    // ВАЖНО: чтобы ты видел, что клик реально сработал
-    setStatus("Поиск…");
-
-    const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || "";
-    const url = `/api/search?q=${encodeURIComponent(q)}${userId ? `&user_id=${encodeURIComponent(userId)}` : ""}`;
-
-    let res;
-    try {
-      res = await fetch(url, { method: "GET", cache: "no-store" });
-    } catch (e) {
-      setStatus("Ошибка сети (fetch)", true);
-      return;
-    }
-
-    if (!res.ok) {
-      setStatus(`Ошибка поиска (${res.status})`, true);
-      return;
-    }
-
-    let dataJson;
-    try {
-      dataJson = await res.json();
-    } catch (e) {
-      setStatus("Ошибка ответа (JSON)", true);
-      return;
-    }
-
-    const items = Array.isArray(dataJson) ? dataJson : (Array.isArray(dataJson?.items) ? dataJson.items : []);
-
-    if (!items.length) {
-      renderEmpty("Ничего не найдено");
-      return;
-    }
-
-    setStatus("");
-    renderCards(items);
-  }
-
-  function clearAll() {
-    const qEl = $("q");
-    if (qEl) qEl.value = "";
-    setStatus("");
-    renderEmpty();
-  }
-
-  function bind() {
-    const btn = $("btn");
-    const clear = $("clear");
-    const qEl = $("q");
-    const list = $("list");
-
-    // Показываем 2 секунды, чтобы точно заметил
-    setStatus("JS OK");
-    setTimeout(() => {
-      if ($("st")?.textContent === "JS OK") setStatus("");
-    }, 2000);
-
-    if (!btn || !clear || !qEl) {
-      setStatus("JS: не найдены элементы (q/btn/clear)", true);
-      return;
-    }
-
-    // ДВОЙНОЕ привязывание: addEventListener + onclick
-    btn.addEventListener("click", doSearch);
-    btn.onclick = doSearch;
-
-    clear.addEventListener("click", clearAll);
-    clear.onclick = clearAll;
-
-    qEl.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") doSearch();
-    });
-
-    // клики по карточкам (переход на /item)
-    if (list) {
-      list.addEventListener("click", (e) => {
-        const t = e.target;
-        if (!t || !t.dataset) return;
-        const code = (t.dataset.code || "").trim();
-        const act = (t.dataset.action || "").trim();
-        if (!code || !act) return;
+    // Описание
+    document.querySelectorAll("[data-info]").forEach(b=>{
+      b.addEventListener("click", ()=>{
+        const code = b.getAttribute("data-info");
         window.location.href = `/item?code=${encodeURIComponent(code)}`;
       });
-    }
+    });
 
-    // экспортируем наружу (fallback для onclick из HTML)
-    window.MG_DO_SEARCH = doSearch;
-    window.MG_CLEAR = clearAll;
-  }
+    // Списание
+    document.querySelectorAll("[data-issue]").forEach(b=>{
+      b.addEventListener("click", async ()=>{
+        const code = b.getAttribute("data-issue");
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", bind);
-  } else {
-    bind();
+        const qty = prompt("Сколько списать? (пример: 1 или 2.5)");
+        if(!qty) return;
+
+        const comment = prompt("Комментарий (пример: OP-1100, замена датчика)") || "";
+
+        const payload = {
+          user_id: userId(),
+          name: userName(),
+          code: code,
+          qty: qty,
+          comment: comment
+        };
+
+        try{
+          const res = await fetch("/api/issue", {
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body: JSON.stringify(payload)
+          });
+
+          const out = await res.json().catch(()=> ({}));
+          if(!res.ok || !out.ok){
+            alert(out.error || "Ошибка списания");
+            return;
+          }
+          alert("✅ Списание записано в История");
+        }catch(e){
+          alert("Ошибка сети/сервера при списании");
+        }
+      });
+    });
+
+  }catch(e){
+    st.textContent = "Ошибка поиска (500)";
+    list.innerHTML = `<div class="item">Ошибка поиска. Проверь соединение/сервер.</div>`;
   }
+}
+
+btn?.addEventListener("click", doSearch);
+q?.addEventListener("keydown", e=>{ if(e.key==="Enter") doSearch(); });
+
+clr?.addEventListener("click", ()=>{
+  q.value = "";
+  st.textContent = "";
+  list.innerHTML = "";
+  q.focus();
+});
 
   window.addEventListener("error", (e) => {
     setStatus("JS ошибка: " + (e?.message || "unknown"), true);
