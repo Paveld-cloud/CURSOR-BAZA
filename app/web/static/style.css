@@ -4,7 +4,6 @@
   --text:#eaf2ff;
 
   --line:rgba(255,255,255,.10);
-  --line2:rgba(255,255,255,.16);
 
   --cardA: rgba(255,255,255,.08);
   --cardB: rgba(255,255,255,.04);
@@ -16,6 +15,17 @@
   --shadow2:0 10px 22px rgba(0,0,0,.32);
 
   --radius:18px;
+
+  /* системный safe-area (iOS). если нет — будет 0 */
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+
+  /* высота верхней панели Telegram приблизительно.
+     мы используем как базу, чтобы контент "сел" правильно */
+  --tgbar: 48px;
+
+  /* итоговый верхний отступ: safe-area + tgbar */
+  --topInset: calc(var(--sat) + var(--tgbar));
 }
 
 *{ box-sizing:border-box; }
@@ -33,56 +43,82 @@ body{
 }
 
 /* =========================
-   Layout (index + item)
+   App shell / layout
 ========================= */
-.wrap, .app{
+.appShell{
   max-width: 980px;
   margin: 0 auto;
-  padding: 14px 12px 28px;
+  padding: 0 12px calc(18px + var(--sab));
 }
 
-.top{ margin: 6px 0 12px; }
-.h1{
-  font-size: 20px;
-  font-weight: 900;
-  letter-spacing: .2px;
-}
-.sub{
-  margin-top: 4px;
-  font-size: 13px;
-  color: var(--muted);
-}
+/* чтобы хедер не упирался в системную панель */
+.appTopbar{
+  position: sticky;
+  top: 0;
+  z-index: 50;
 
-/* item.html header */
-.header{
+  /* ключевая часть: отступ под системную панель */
+  padding-top: var(--topInset);
+
+  /* нижний паддинг — визуальный */
+  padding-bottom: 10px;
+
   display:flex;
-  align-items:center;
+  align-items:flex-end;
   justify-content:space-between;
   gap: 12px;
-  margin: 6px 0 12px;
+
+  /* стекло + плавное "встраивание" */
+  background:
+    linear-gradient(180deg, rgba(11,18,32,.92), rgba(11,18,32,.55));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  border-bottom: 1px solid rgba(255,255,255,.10);
 }
-.brand__title{
+
+/* “свет” в хедере */
+.appTopbar::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:
+    radial-gradient(680px 220px at 22% 0%, rgba(255,255,255,.08), transparent 60%),
+    radial-gradient(420px 260px at 92% 10%, rgba(37,99,235,.12), transparent 60%);
+  pointer-events:none;
+}
+
+.appTopbar__left{ position: relative; }
+.appTopbar__right{ position: relative; display:flex; align-items:center; }
+
+.appTopbar__title{
   font-size: 18px;
-  font-weight: 900;
+  font-weight: 950;
+  letter-spacing: .2px;
+  line-height: 1.1;
 }
-.brand__sub{
+.appTopbar__subtitle{
   margin-top: 4px;
   font-size: 13px;
-  color: var(--muted);
+  color: rgba(255,255,255,.72);
 }
 
-.pill{
-  font-size: 12px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: rgba(255,255,255,.08);
-  color: rgba(255,255,255,.88);
-  box-shadow: 0 6px 16px rgba(0,0,0,.18);
+/* основной контент */
+.appMain{
+  padding-top: 12px;
 }
+
+/* футер минимальный */
+.appFooter{
+  margin-top: 14px;
+  padding: 10px 2px;
+  color: rgba(255,255,255,.45);
+  font-size: 12px;
+}
+.appFooter__text{ }
 
 /* =========================
-   Panels / cards (glass)
+   Glass cards / panels
 ========================= */
 .card,
 .panel{
@@ -97,8 +133,6 @@ body{
   margin: 10px 0 14px;
   overflow: hidden;
 }
-
-/* subtle top highlight */
 .card::before,
 .panel::before{
   content:"";
@@ -110,8 +144,18 @@ body{
   pointer-events:none;
 }
 
+.label{
+  display:block;
+  font-size: 13px;
+  font-weight: 850;
+  margin-bottom: 8px;
+  color: rgba(255,255,255,.82);
+}
+
+.row{ }
+
 /* =========================
-   Inputs / buttons
+   Inputs / Buttons
 ========================= */
 .input{
   width: 100%;
@@ -138,7 +182,7 @@ body{
   padding: 11px 12px;
   background: linear-gradient(180deg, rgba(37,99,235,1), rgba(37,99,235,.82));
   color: white;
-  font-weight: 850;
+  font-weight: 900;
   font-size: 14px;
   cursor: pointer;
   box-shadow: 0 12px 22px rgba(37,99,235,.26);
@@ -174,10 +218,9 @@ body{
 .hint--mt{ margin-top: 10px; }
 
 .section{
-  font-weight: 900;
+  font-weight: 950;
   letter-spacing: .2px;
 }
-
 .listTop{
   display:flex;
   align-items: baseline;
@@ -188,8 +231,6 @@ body{
   color: rgba(255,255,255,.65);
   font-size: 13px;
 }
-
-/* chips (если есть в index.html) */
 .chip{
   display:inline-block;
   padding: 2px 8px;
@@ -213,8 +254,7 @@ body{
 }
 
 /* =========================
-   EFFECT CARD (the main change)
-   .item is the result card
+   Result card
 ========================= */
 .item{
   position: relative;
@@ -224,8 +264,6 @@ body{
   background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
   box-shadow: var(--shadow2);
 }
-
-/* gradient frame */
 .item::before{
   content:"";
   position:absolute;
@@ -241,8 +279,6 @@ body{
   opacity: .55;
   pointer-events:none;
 }
-
-/* inner glass layer */
 .item::after{
   content:"";
   position:absolute;
@@ -270,8 +306,6 @@ body{
 @media (min-width: 420px){
   .itemPhoto{ height: 260px; }
 }
-
-/* photo: clean “product shot” */
 .photo{
   width: 100%;
   height: 100%;
@@ -283,7 +317,6 @@ body{
   box-shadow: 0 14px 28px rgba(0,0,0,.35);
 }
 .photo.fit-cover{ object-fit: cover; }
-
 .noPhoto{
   color: rgba(255,255,255,.65);
   font-size: 16px;
@@ -297,18 +330,16 @@ body{
   position: relative;
   padding: 12px 12px 14px;
 }
-
-/* Header line: CODE + STOCK chips */
 .codeLine{
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap: 10px;
   margin-bottom: 10px;
-  font-weight: 900;
+  font-size: 14px;
+  font-weight: 950;
+  color: rgba(255,255,255,.92);
 }
-
-/* Make the code and stock look like badges */
 .codeLine b{
   display:inline-block;
   padding: 3px 10px;
@@ -318,21 +349,12 @@ body{
   font-size: 13px;
   letter-spacing: .15px;
 }
-
-/* if codeLine contains plain text too, keep it readable */
-.codeLine{
-  font-size: 14px;
-  color: rgba(255,255,255,.92);
-}
-
 .title{
   font-size: 15px;
-  font-weight: 850;
+  font-weight: 900;
   line-height: 1.25;
   margin: 2px 0 10px;
 }
-
-/* Meta block: tighter and “panel” */
 .meta{
   display:grid;
   gap: 7px;
@@ -344,14 +366,10 @@ body{
   border: 1px solid rgba(255,255,255,.12);
   border-radius: 14px;
 }
-
-/* emphasize labels */
 .meta b{
   color: rgba(255,255,255,.92);
-  font-weight: 850;
+  font-weight: 900;
 }
-
-/* Buttons on card */
 .btnRow{
   display:flex;
   gap: 10px;
@@ -360,7 +378,7 @@ body{
 .btnRow .btn{ flex:1; }
 
 /* =========================
-   Detail page (item.html)
+   Detail page
 ========================= */
 .photoWrap{ margin-top: 10px; }
 .box{ margin-top: 10px; }
@@ -395,11 +413,3 @@ body{
   margin-top: 12px;
 }
 .actions .btn{ flex:1; }
-
-/* Footer */
-.footer{
-  margin-top: 14px;
-  color: rgba(255,255,255,.55);
-  font-size: 12px;
-}
-.footer__text{}
