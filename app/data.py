@@ -50,7 +50,6 @@ except Exception:
         "oem парт номер",
     ]
 
-# приводим к пробельному виду (на случай парт_номер)
 SEARCH_COLUMNS = [str(c).strip().lower().replace("_", " ") for c in (SEARCH_COLUMNS or [])]
 
 GOOGLE_APPLICATION_CREDENTIALS_JSON = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON", "")
@@ -79,7 +78,7 @@ ASK_QUANTITY, ASK_COMMENT, ASK_CONFIRM = range(3)
 # ---------- Утилиты ----------
 def _norm_code(x: str) -> str:
     s = str(x or "").strip().lower()
-    s = s.replace("o", "0")  # O -> 0
+    s = s.replace("o", "0")
     s = re.sub(r"[^a-z0-9]", "", s)
     return s
 
@@ -111,10 +110,7 @@ def squash(text: str) -> str:
 
 
 def normalize(text: str) -> str:
-    """
-    ВАЖНО: функция нужна для webapp.py
-    Делает безопасную нормализацию текста в слова.
-    """
+    # требуется webapp.py
     return re.sub(r"[^\w\s]", " ", str(text or "").lower(), flags=re.U).strip()
 
 
@@ -148,6 +144,32 @@ def _clean_query(q: str) -> str:
     s = re.sub(r"[^\w\sа-яё0-9a-z]", " ", s, flags=re.I | re.U)
     s = re.sub(r"\s+", " ", s, flags=re.U).strip()
     return s
+
+
+def _get_search_cols(df_: pd.DataFrame) -> List[str]:
+    """
+    КЛЮЧЕВОЕ: поиск 'как раньше' — по всем релевантным колонкам.
+    Приоритет: SEARCH_COLUMNS, но если нужные значения в других колонках (PART NUMBER, PN и т.п.) — тоже ищем.
+    """
+    all_cols = [str(c).strip().lower() for c in df_.columns]
+    # исключаем техническое
+    all_cols = [c for c in all_cols if c and c not in {"image"}]
+
+    # приоритетные (если существуют)
+    preferred = [c for c in SEARCH_COLUMNS if c in all_cols]
+
+    # добавим типовые “part/oem/номер” колонки по маскам (англ/рус)
+    extra = []
+    patt = re.compile(r"(part|pn|p\/n|oem|номер|part\s*no|material|код|code)", re.I)
+    for c in all_cols:
+        if c in preferred:
+            continue
+        if patt.search(c):
+            extra.append(c)
+
+    # итог: сначала preferred, затем extra, затем все остальные
+    rest = [c for c in all_cols if c not in preferred and c not in extra]
+    return preferred + extra + rest
 
 
 # ---------- Формат карточки ----------
@@ -216,6 +238,7 @@ def _load_sap_dataframe() -> pd.DataFrame:
     for c in new_df.columns:
         new_df[c] = new_df[c].astype(str).fillna("").map(lambda x: str(x).strip())
 
+    # нормализуем самые частые колонки, но поиск у нас теперь по всем — это не критично
     for col in ("код", "oem", "парт номер", "oem парт номер"):
         if col in new_df.columns:
             new_df[col] = new_df[col].astype(str).map(lambda x: str(x).strip().lower())
@@ -223,13 +246,16 @@ def _load_sap_dataframe() -> pd.DataFrame:
     if "image" in new_df.columns:
         new_df["image"] = new_df["image"].astype(str).map(lambda x: str(x).strip())
 
+    # важное: приводим названия колонок к lower() (для стабильного доступа)
+    new_df.columns = [str(c).strip().lower() for c in new_df.columns]
+
     return new_df
 
 
 # ---------- Индексы ----------
 def build_search_index(df_: pd.DataFrame) -> Dict[str, Set[int]]:
     idx: Dict[str, Set[int]] = {}
-    cols = [c for c in SEARCH_COLUMNS if c in df_.columns]
+    cols = _get_search_cols(df_)
     token_re = re.compile(r"[0-9a-zа-яё]+", flags=re.I)
 
     for i, row in df_.iterrows():
@@ -238,11 +264,12 @@ def build_search_index(df_: pd.DataFrame) -> Dict[str, Set[int]]:
             if not raw:
                 continue
 
-            if c in ("код", "парт номер", "oem парт номер", "oem"):
-                norm = _norm_code(raw)
-                if norm:
-                    idx.setdefault(norm, set()).add(i)
+            # code-like: всегда кладём norm_code — чтобы PI8808DRG500 матчился даже если с дефисами/пробелами
+            norm = _norm_code(raw)
+            if norm and len(norm) >= 3:
+                idx.setdefault(norm, set()).add(i)
 
+            # токены RU/EN/цифры
             for t in token_re.findall(raw):
                 key = _norm_str(t)
                 if key and len(key) >= 2:
@@ -252,7 +279,7 @@ def build_search_index(df_: pd.DataFrame) -> Dict[str, Set[int]]:
 
 
 def build_row_blob(df_: pd.DataFrame) -> Dict[int, str]:
-    cols = [c for c in SEARCH_COLUMNS if c in df_.columns]
+    cols = _get_search_cols(df_)
     blobs: Dict[int, str] = {}
     for i, row in df_.iterrows():
         parts = []
@@ -297,7 +324,9 @@ def ensure_fresh_data(force: bool = False):
     _row_blob = build_row_blob(df)
     _image_index = build_image_index(df)
     _last_load_ts = time.time()
-    logger.info(f"✅ SAP reload: {len(df)} rows, index={len(_search_index)} keys, blobs={len(_row_blob)}, images={len(_image_index)} keys")
+    logger.info(
+        f"✅ SAP reload: {len(df)} rows, index={len(_search_index)} keys, blobs={len(_row_blob)}, images={len(_image_index)} keys"
+    )
 
 
 # ---------- Картинки ----------
@@ -386,15 +415,11 @@ def _token_keys(raw_token: str) -> List[str]:
 
 
 def match_row_by_index(tokens: List[str]) -> Set[int]:
-    """
-    1) индекс
-    2) если пусто — substring fallback "как раньше"
-    """
     ensure_fresh_data()
     if not tokens:
         return set()
 
-    # 1) индекс
+    # 1) индекс (AND, потом OR)
     per_token_sets: List[Set[int]] = []
     for t in tokens:
         keys = _token_keys(t)
@@ -418,7 +443,7 @@ def match_row_by_index(tokens: List[str]) -> Set[int]:
         if found:
             return found
 
-    # 2) fallback "как раньше"
+    # 2) fallback "как раньше" — подстрока по всей строке
     q = _clean_query(" ".join([str(t) for t in tokens]))
     if not q or len(q) < 2:
         return set()
