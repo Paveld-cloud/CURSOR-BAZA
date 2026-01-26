@@ -26,9 +26,9 @@
   --goldLine: rgba(212,175,55,.35);
 
   /* header base (graphite) */
-  --hdrA: #121212;
-  --hdrB: #161616;
-  --hdrC: #1a1a1a;
+  --hdrA: #0f0f10;
+  --hdrB: #141416;
+  --hdrC: #18181b;
 }
 
 *{ box-sizing:border-box; }
@@ -39,10 +39,32 @@ body{
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   color:var(--text);
   background:
-    radial-gradient(1200px 700px at 12% -10%, rgba(37,99,235,.32), transparent 55%),
-    radial-gradient(900px 600px at 110% 8%, rgba(16,185,129,.12), transparent 55%),
-    radial-gradient(800px 520px at 60% 110%, rgba(168,85,247,.08), transparent 55%),
+    radial-gradient(1200px 700px at 12% -10%, rgba(37,99,235,.28), transparent 55%),
+    radial-gradient(900px 600px at 110% 8%, rgba(16,185,129,.10), transparent 55%),
+    radial-gradient(800px 520px at 60% 110%, rgba(168,85,247,.07), transparent 55%),
     var(--bg);
+}
+
+/* =========================
+   Animations
+========================= */
+@keyframes fadeDown{
+  0% { opacity: 0; transform: translateY(-8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes popIn{
+  0% { opacity: 0; transform: translateY(10px) scale(.985); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes goldSweep{
+  0%   { transform: translateX(-40%); opacity: .15; }
+  50%  { opacity: .55; }
+  100% { transform: translateX(40%); opacity: .15; }
+}
+@keyframes pulseGlow{
+  0% { box-shadow: 0 0 8px rgba(212,175,55,.18); }
+  50% { box-shadow: 0 0 14px rgba(212,175,55,.35); }
+  100% { box-shadow: 0 0 8px rgba(212,175,55,.18); }
 }
 
 /* =========================
@@ -55,15 +77,16 @@ body{
 }
 
 /* =========================
-   Topbar (GM Gold + Graphite)
+   Topbar (separated from Telegram system bar)
+   Цель: НЕ сливается с системной шапкой
 ========================= */
 .appTopbar{
   position: sticky;
   top: 0;
   z-index: 50;
 
-  /* только safe-area, Telegram свою панель рисует сам */
-  padding-top: var(--sat);
+  /* safe-area + разделительная “прокладка” */
+  padding-top: calc(var(--sat) + 10px);
   padding-bottom: 10px;
 
   display:flex;
@@ -75,32 +98,56 @@ body{
     linear-gradient(180deg, var(--hdrA) 0%, var(--hdrB) 55%, var(--hdrC) 100%);
 
   border-bottom: 1px solid var(--goldLine);
-  box-shadow: 0 10px 26px rgba(0,0,0,.40);
+  box-shadow: 0 12px 26px rgba(0,0,0,.45);
+
+  animation: fadeDown .22s ease-out;
 }
 
-/* мягкое свечение + тонкая золотая линия */
+/* верхняя тёмная полоса — визуальный разделитель от Telegram */
 .appTopbar::before{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  top:0;
+  height: 10px;
+  background: rgba(0,0,0,.55);
+  pointer-events:none;
+}
+
+/* золотая линия снизу + подсветка */
+.appTopbar::after{
   content:"";
   position:absolute;
   left:0;
   right:0;
   bottom:0;
   height:2px;
-
   background: linear-gradient(90deg, transparent, rgba(212,175,55,.85), transparent);
   box-shadow: 0 0 10px rgba(212,175,55,.45);
   pointer-events:none;
 }
 
-/* лёгкий свет сверху (не синий) */
-.appTopbar::after{
+/* золотой “блик”, движущийся по линии */
+.appTopbar .goldSweep{
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:0;
+  height:2px;
+  overflow:hidden;
+  pointer-events:none;
+}
+.appTopbar .goldSweep::before{
   content:"";
   position:absolute;
-  left:0; right:0; top:0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,.14), transparent);
-  opacity:.75;
-  pointer-events:none;
+  left:-40%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(212,175,55,.85), transparent);
+  animation: goldSweep 2.6s ease-in-out infinite;
+  filter: blur(.2px);
+  opacity: .35;
 }
 
 .appTopbar__left{ min-width: 0; }
@@ -152,6 +199,8 @@ body{
   color: rgba(255,255,255,.92);
   box-shadow: 0 8px 18px rgba(0,0,0,.22);
   white-space: nowrap;
+
+  animation: pulseGlow 2.4s ease-in-out infinite;
 }
 .pill::before{
   content:"";
@@ -177,6 +226,7 @@ body{
   padding: 12px;
   margin: 10px 0 14px;
   overflow: hidden;
+  animation: popIn .22s ease-out;
 }
 .card::before,
 .panel::before{
@@ -207,6 +257,7 @@ body{
   color: var(--text);
   font-size: 15px;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+  transition: box-shadow .15s ease, border-color .15s ease, transform .15s ease;
 }
 .input:focus{
   border-color: rgba(212,175,55,.55);
@@ -215,6 +266,7 @@ body{
     inset 0 1px 0 rgba(255,255,255,.05);
 }
 
+/* buttons */
 .btn{
   appearance:none;
   border:0;
@@ -226,8 +278,10 @@ body{
   font-size: 14px;
   cursor: pointer;
   box-shadow: 0 12px 22px rgba(37,99,235,.26);
+  transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
 }
-.btn:active{ transform: translateY(1px); }
+.btn:active{ transform: translateY(1px) scale(.995); }
+.btn:hover{ filter: brightness(1.02); }
 
 .btn.ghost,
 .btn.btn--ghost{
@@ -298,6 +352,12 @@ body{
   border: 1px solid rgba(255,255,255,.12);
   background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
   box-shadow: var(--shadow2);
+  animation: popIn .22s ease-out;
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+.item:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 14px 26px rgba(0,0,0,.38);
 }
 
 .itemPhoto{
@@ -391,6 +451,7 @@ body{
 ========================= */
 .photoWrap{ margin-top: 10px; }
 .box{ margin-top: 10px; }
+
 .img{
   width:100%;
   max-height: 320px;
@@ -402,6 +463,7 @@ body{
   padding: 8px;
   box-shadow: 0 16px 30px rgba(0,0,0,.34);
 }
+
 .pre{
   margin-top: 10px;
   white-space: pre-wrap;
@@ -413,6 +475,7 @@ body{
   border-radius: 14px;
   padding: 10px;
 }
+
 .actions{
   display:flex;
   gap: 10px;
