@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>БАЗА MG</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260125" />
+  <link rel="stylesheet" href="/static/style.css?v=20260126" />
 </head>
 <body>
   <div class="wrap">
@@ -22,8 +22,8 @@
       </div>
 
       <div class="row btns">
-        <button id="btn" class="btn">Искать</button>
-        <button id="clear" class="btn ghost">Очистить</button>
+        <button id="btn" class="btn" onclick="window.MG_DO_SEARCH && window.MG_DO_SEARCH()">Искать</button>
+        <button id="clear" class="btn ghost" onclick="window.MG_CLEAR && window.MG_CLEAR()">Очистить</button>
       </div>
 
       <div class="hint">
@@ -49,6 +49,6 @@
   </div>
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="/static/app.js?v=20260125"></script>
+  <script src="/static/app.js?v=20260126"></script>
 </body>
 </html>
