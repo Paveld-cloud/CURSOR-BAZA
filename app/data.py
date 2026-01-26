@@ -16,7 +16,6 @@ from zoneinfo import ZoneInfo
 
 logger = logging.getLogger("bot.data")
 
-# ---------- Конфиг ----------
 try:
     from app.config import (
         SPREADSHEET_URL,
@@ -39,13 +38,7 @@ except Exception:
     SAP_SHEET_NAME = os.getenv("SAP_SHEET_NAME", "SAP")
     USERS_SHEET_NAME = os.getenv("USERS_SHEET_NAME", "Пользователи")
     SEARCH_COLUMNS = [
-        "тип",
-        "наименование",
-        "код",
-        "oem",
-        "изготовитель",
-        "парт номер",
-        "oem парт номер",
+        "тип", "наименование", "код", "oem", "изготовитель", "парт номер", "oem парт номер"
     ]
 
 SEARCH_COLUMNS = [str(c).strip().lower().replace("_", " ") for c in (SEARCH_COLUMNS or [])]
@@ -53,7 +46,6 @@ SEARCH_COLUMNS = [str(c).strip().lower().replace("_", " ") for c in (SEARCH_COLU
 GOOGLE_APPLICATION_CREDENTIALS_JSON = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON", "")
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# ---------- Глобальное состояние ----------
 df: Optional[pd.DataFrame] = None
 _last_load_ts: float = 0.0
 
@@ -69,13 +61,11 @@ issue_state: Dict[int, dict] = {}
 SHEET_ALLOWED: Set[int] = set()
 SHEET_ADMINS: Set[int] = set()
 SHEET_BLOCKED: Set[int] = set()
-
 _last_users_load_ts: float = 0.0
 
 ASK_QUANTITY, ASK_COMMENT, ASK_CONFIRM = range(3)
 
 
-# ---------- Утилиты ----------
 def _norm_code(x: str) -> str:
     s = str(x or "").strip().lower()
     s = s.replace("o", "0")
@@ -87,6 +77,19 @@ def _norm_str(x: str) -> str:
     return str(x or "").strip().lower()
 
 
+def squash(text: str) -> str:
+    """
+    Совместимость с handlers/webapp:
+    превращает строку в 'склеенный' вид без пробелов/символов.
+    """
+    return re.sub(r"[\W_]+", "", str(text or "").lower(), flags=re.U)
+
+
+def normalize(text: str) -> str:
+    # требуется webapp.py
+    return re.sub(r"[^\w\s]", " ", str(text or "").lower(), flags=re.U).strip()
+
+
 def now_local_str(tz_name: str = None) -> str:
     tz = ZoneInfo(tz_name or TZ_NAME or "Asia/Tashkent")
     return datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
@@ -94,11 +97,6 @@ def now_local_str(tz_name: str = None) -> str:
 
 def val(d: dict, key: str, default: str = "") -> str:
     return str(d.get(key, default) or default)
-
-
-def normalize(text: str) -> str:
-    # требуется webapp.py
-    return re.sub(r"[^\w\s]", " ", str(text or "").lower(), flags=re.U).strip()
 
 
 def _canon_header(h: str, idx: int) -> str:
@@ -133,7 +131,6 @@ def _clean_query(q: str) -> str:
 
 
 def _get_search_cols(df_: pd.DataFrame) -> List[str]:
-    # поиск широкий (как у тебя сейчас работает)
     all_cols = [str(c).strip().lower() for c in df_.columns]
     all_cols = [c for c in all_cols if c and c not in {"image"}]
 
@@ -151,7 +148,6 @@ def _get_search_cols(df_: pd.DataFrame) -> List[str]:
     return preferred + extra + rest
 
 
-# ---------- Google Sheets ----------
 def get_gs_client():
     if not GOOGLE_APPLICATION_CREDENTIALS_JSON:
         raise RuntimeError("GOOGLE_APPLICATION_CREDENTIALS_JSON не задан")
@@ -177,7 +173,6 @@ def _load_sap_dataframe() -> pd.DataFrame:
 
     headers = _dedupe_headers(values[0])
     rows = values[1:]
-
     new_df = pd.DataFrame(rows, columns=headers)
 
     for c in new_df.columns:
@@ -185,7 +180,6 @@ def _load_sap_dataframe() -> pd.DataFrame:
 
     new_df.columns = [str(c).strip().lower() for c in new_df.columns]
 
-    # ключевые поля
     for col in ("код", "oem", "парт номер", "oem парт номер"):
         if col in new_df.columns:
             new_df[col] = new_df[col].astype(str).map(lambda x: str(x).strip().lower())
@@ -196,7 +190,6 @@ def _load_sap_dataframe() -> pd.DataFrame:
     return new_df
 
 
-# ---------- Индексы ----------
 def build_search_index(df_: pd.DataFrame) -> Dict[str, Set[int]]:
     idx: Dict[str, Set[int]] = {}
     cols = _get_search_cols(df_)
@@ -207,17 +200,13 @@ def build_search_index(df_: pd.DataFrame) -> Dict[str, Set[int]]:
             raw = str(row.get(c, "") or "").strip().lower()
             if not raw:
                 continue
-
-            # кладём norm_code для любых колонок, чтобы коды ловились везде
             norm = _norm_code(raw)
             if norm and len(norm) >= 3:
                 idx.setdefault(norm, set()).add(i)
-
             for t in token_re.findall(raw):
                 key = _norm_str(t)
                 if key and len(key) >= 2:
                     idx.setdefault(key, set()).add(i)
-
     return idx
 
 
@@ -235,24 +224,17 @@ def build_row_blob(df_: pd.DataFrame) -> Dict[int, str]:
 
 
 def build_image_by_code(df_: pd.DataFrame) -> Dict[str, str]:
-    """
-    СТРОГО:
-    - берём только столбец image
-    - ключ: НОРМАЛИЗОВАННЫЙ код из столбца 'код'
-    """
     m: Dict[str, str] = {}
     if "код" not in df_.columns or "image" not in df_.columns:
         return m
-
     for _, row in df_.iterrows():
         code_raw = str(row.get("код", "")).strip()
         url = str(row.get("image", "")).strip()
         if not code_raw or not url:
             continue
         key = _norm_code(code_raw)
-        if not key:
-            continue
-        m.setdefault(key, url)  # первый непустой фиксируем
+        if key:
+            m.setdefault(key, url)
     return m
 
 
@@ -274,16 +256,8 @@ def ensure_fresh_data(force: bool = False):
     )
 
 
-# ---------- Картинки ----------
 async def find_image_by_code_async(code: str) -> str:
-    """
-    ЖЁСТКО:
-    только код -> image из столбца image.
-    Никаких fallback. Никаких "из строки поиска". Никаких "по имени файла".
-    """
     ensure_fresh_data()
-    if not code:
-        return ""
     key = _norm_code(code)
     if not key:
         return ""
@@ -330,7 +304,6 @@ async def resolve_image_url_async(url_raw: str) -> str:
     return url
 
 
-# ---------- Поиск ----------
 def _token_keys(raw_token: str) -> List[str]:
     t = str(raw_token or "").strip().lower()
     if not t:
@@ -366,7 +339,6 @@ def match_row_by_index(tokens: List[str]) -> Set[int]:
             acc &= s
         if acc:
             return acc
-
         found: Set[int] = set()
         for s in per_token_sets:
             found |= s
@@ -384,7 +356,6 @@ def match_row_by_index(tokens: List[str]) -> Set[int]:
     return hits
 
 
-# ---------- Экспорт ----------
 def _df_to_xlsx(df_: pd.DataFrame, filename: str = "export.xlsx") -> io.BytesIO:
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
@@ -393,7 +364,6 @@ def _df_to_xlsx(df_: pd.DataFrame, filename: str = "export.xlsx") -> io.BytesIO:
     return buf
 
 
-# ---------- Пользователи ----------
 def _parse_int(x) -> Optional[int]:
     try:
         v = int(str(x).strip())
@@ -446,8 +416,7 @@ def load_users_from_sheet() -> Tuple[Set[int], Set[int], Set[int]]:
         if has_role:
             role = str(r.get("role", "")).strip().lower()
             if role in ("admin", "админ"):
-                admins.add(uid)
-                allowed.add(uid)
+                admins.add(uid); allowed.add(uid)
             elif role in ("blocked", "ban", "заблокирован"):
                 blocked.add(uid)
             else:
@@ -455,15 +424,11 @@ def load_users_from_sheet() -> Tuple[Set[int], Set[int], Set[int]]:
             continue
 
         if has_blocked and truthy(r.get("blocked")):
-            blocked.add(uid)
-            continue
+            blocked.add(uid); continue
         if has_admin and truthy(r.get("admin")):
-            admins.add(uid)
-            allowed.add(uid)
-            continue
+            admins.add(uid); allowed.add(uid); continue
         if has_allowed and truthy(r.get("allowed")):
-            allowed.add(uid)
-            continue
+            allowed.add(uid); continue
 
         allowed.add(uid)
 
@@ -487,14 +452,12 @@ def ensure_fresh_users(force: bool = False):
         logger.warning(f"ensure_fresh_users error: {e}")
 
 
-# ---------- Async helper ----------
 import asyncio
 async def asyncio_to_thread(func, *args, **kwargs):
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
 
 
-# ---------- Backward-compat ----------
 def initial_load():
     ensure_fresh_data(force=True)
     ensure_fresh_users(force=True)
@@ -503,5 +466,4 @@ def initial_load():
 async def initial_load_async():
     await asyncio_to_thread(ensure_fresh_data, True)
     await asyncio_to_thread(ensure_fresh_users, True)
-
 
