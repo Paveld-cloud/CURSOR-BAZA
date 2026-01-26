@@ -1,4 +1,6 @@
-# app/data.py
+from pathlib import Path
+
+data_py = r'''# app/data.py
 import os
 import io
 import re
@@ -19,7 +21,8 @@ import os.path
 logger = logging.getLogger("bot.data")
 
 # ---------------- Config ----------------
-# Берём значения из app/config.py, но с фолбэками на env
+# Берём значения из app/config.py, но с фолбэками на env.
+# ВАЖНО: не переименовывай переменные — на них завязаны handlers/webapp.
 try:
     from app.config import (
         SPREADSHEET_URL,
@@ -53,7 +56,14 @@ df: Optional[pd.DataFrame] = None
 _last_load_ts: float = 0.0
 
 _search_index: Dict[str, Set[int]] = {}
-_image_index: Dict[str, str] = {}   # norm(code) -> url (из той же строки)
+
+# Индекс "код->image" из той же строки (ускорение/для диагностики).
+# Но ИСТИНА по фото — _image_file_index (по всему столбцу image, по имени файла).
+_image_index: Dict[str, str] = {}
+
+# Главный индекс для фото:
+# KEY = basename(url) без расширения (например UZ000664), VALUE = url из СТОЛБЦА image (любой строки)
+_image_file_index: Dict[str, str] = {}
 
 SHEET_ALLOWED: Set[int] = set()
 SHEET_ADMINS: Set[int] = set()
@@ -167,7 +177,7 @@ def _load_sap_dataframe() -> pd.DataFrame:
     rows = values[1:]
     new_df = pd.DataFrame(rows, columns=headers)
 
-    # Нормализуем критичные колонки
+    # Нормализуем критичные колонки (как строки)
     for col in ("код", "парт номер", "oem парт номер", "oem"):
         if col in new_df.columns:
             new_df[col] = new_df[col].astype(str).fillna("").str.strip()
@@ -178,6 +188,8 @@ def _load_sap_dataframe() -> pd.DataFrame:
     return new_df
 
 # ---------------- Index builders ----------------
+_ALLOWED_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
+
 def build_search_index(df_: pd.DataFrame) -> Dict[str, Set[int]]:
     """
     Индекс для быстрого поиска.
@@ -211,8 +223,8 @@ def build_search_index(df_: pd.DataFrame) -> Dict[str, Set[int]]:
 
 def build_image_index(df_: pd.DataFrame) -> Dict[str, str]:
     """
-    Быстрый индекс: norm(код) -> URL из КОЛОНКИ image (из той же строки).
-    Это только ускорение. Истина — проверка имени файла (см. ниже).
+    Ускорение: norm(код) -> URL из КОЛОНКИ image (из той же строки).
+    ВАЖНО: этот индекс НЕ гарантирует совпадение имени файла с кодом (данные могут быть ошибочны).
     """
     out: Dict[str, str] = {}
     if df_ is None or df_.empty:
@@ -230,9 +242,39 @@ def build_image_index(df_: pd.DataFrame) -> Dict[str, str]:
             out.setdefault(k, url)
     return out
 
+def build_image_file_index(df_: pd.DataFrame) -> Dict[str, str]:
+    """
+    ГЛАВНЫЙ индекс фото (как ты требуешь):
+    ищем по ВСЕМ строкам столбца image совпадение имени файла.
+
+    Пример:
+      URL: https://i.ibb.co/HLzjRrsQ/UZ000662.png
+      key -> "UZ000662"
+    """
+    out: Dict[str, str] = {}
+    if df_ is None or df_.empty or "image" not in df_.columns:
+        return out
+
+    for raw_url in df_["image"].astype(str).fillna("").tolist():
+        u = str(raw_url).strip()
+        if not u:
+            continue
+        try:
+            path = urlparse(u).path
+            fname = os.path.basename(path)
+            name, ext = os.path.splitext(fname)
+            if not name or ext.lower() not in _ALLOWED_EXTS:
+                continue
+            key = name.strip().upper()
+            out.setdefault(key, u)  # берём первое непустое
+        except Exception:
+            continue
+
+    return out
+
 # ---------------- Reload/TTL ----------------
 def ensure_fresh_data(force: bool = False):
-    global df, _last_load_ts, _search_index, _image_index
+    global df, _last_load_ts, _search_index, _image_index, _image_file_index
 
     need = force or df is None or (time.time() - _last_load_ts > DATA_TTL)
     if not need:
@@ -243,72 +285,33 @@ def ensure_fresh_data(force: bool = False):
 
     _search_index = build_search_index(df)
     _image_index = build_image_index(df)
+    _image_file_index = build_image_file_index(df)
 
     _last_load_ts = time.time()
 
-    logger.info(f"✅ SAP reload: {len(df)} rows, index={len(_search_index)} keys, images={len(_image_index)} keys")
+    logger.info(
+        f"✅ SAP reload: {len(df)} rows, index={len(_search_index)} keys, "
+        f"images_by_row={len(_image_index)} keys, images_by_filename={len(_image_file_index)} keys"
+    )
 
-# ---------------- Strict image matching ----------------
-_ALLOWED_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
-
-def _exact_filename_matches_code(url: str, code: str) -> bool:
-    """
-    СТРОГОЕ соответствие:
-    basename(url) без расширения == CODE (без учета регистра)
-    и расширение в разрешённом списке.
-    """
-    u = str(url or "").strip()
-    c = str(code or "").strip()
-    if not u or not c:
-        return False
-
-    try:
-        path = urlparse(u).path
-        fname = os.path.basename(path)  # например UZ000664.png
-        name, ext = os.path.splitext(fname)
-        if not name or not ext:
-            return False
-        if ext.lower() not in _ALLOWED_EXTS:
-            return False
-        return name.strip().upper() == c.strip().upper()
-    except Exception:
-        return False
-
+# ---------------- Strict image matching (by FULL COLUMN) ----------------
 def find_image_url_by_code_strict(code: str) -> str:
     """
-    Истина для фото:
-    берём код -> находим в колонке image URL,
-    где имя файла РОВНО равно коду.
+    ТВОЁ правило:
+    1) берём код (например UZ000664)
+    2) ищем по ВСЕМ строкам столбца image URL, где basename без расширения == код
+    3) если нет точного совпадения — возвращаем пусто (НЕ подставляем чужие фото)
     """
     ensure_fresh_data()
     if df is None or df.empty:
-        return ""
-    if "image" not in df.columns:
         return ""
 
     code_raw = str(code or "").strip()
     if not code_raw:
         return ""
 
-    # 1) быстрый индекс (если попало) — но всё равно валидируем строго
-    k = _norm_code(code_raw)
-    if k:
-        cand = _image_index.get(k, "")
-        if cand and _exact_filename_matches_code(cand, code_raw):
-            return cand
-
-    # 2) точный проход по колонке image
-    try:
-        for raw_url in df["image"].astype(str).fillna("").tolist():
-            u = raw_url.strip()
-            if not u:
-                continue
-            if _exact_filename_matches_code(u, code_raw):
-                return u
-    except Exception as e:
-        logger.warning(f"find_image_url_by_code_strict scan error: {e}")
-
-    return ""
+    url = _image_file_index.get(code_raw.upper(), "")
+    return url or ""
 
 async def find_image_by_code_async(code: str) -> str:
     """
@@ -504,4 +507,7 @@ async def initial_load_async():
         logger.info(f"✅ USERS reload: allowed={len(SHEET_ALLOWED)} admins={len(SHEET_ADMINS)} blocked={len(SHEET_BLOCKED)}")
     except Exception as e:
         logger.warning(f"USERS load failed: {e}")
-
+'''
+out_path = Path("/mnt/data/data.py")
+out_path.write_text(data_py, encoding="utf-8")
+str(out_path), out_path.stat().st_size
