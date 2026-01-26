@@ -103,35 +103,30 @@ body{
   overflow: hidden;
 }
 
-/* ОДИН контейнер фото (без дублей) */
+/* ВАЖНО: контейнер фото БЕЗ фиксированной высоты (как Telegram) */
 .itemPhoto{
   width: 100%;
-  height: 220px;                 /* базовая высота */
   background: rgba(0,0,0,.22);
   border-bottom: 1px solid var(--line);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding: 8px;                  /* “поля” вокруг фото */
-  /* overflow: hidden;  НЕ нужно при contain, и может визуально резать */
+  padding: 8px;
 }
 
-@media (min-width: 420px){
-  .itemPhoto{ height: 260px; }
-}
-
-/* ОДИН класс img (по умолчанию ВСЕГДА contain = без обрезки) */
+/* Фото: сохраняем пропорции, без “сплюснутости” */
 .photo{
   width: 100%;
-  height: 100%;
-  display:block;
-  object-fit: contain;           /* ключевое: фото целиком */
-  background: rgba(0,0,0,.10);   /* чтобы поля выглядели нормально */
+  height: auto;              /* ключ */
+  max-height: 420px;         /* чтобы гигантские фото не раздували карточку */
+  display: block;
+  margin: 0 auto;
+  object-fit: contain;
+  border-radius: 12px;
+  background: rgba(0,0,0,.10);
 }
 
-/* если захочешь вручную включать режим “крупно” — можно через класс */
-.photo.fit-cover{ object-fit: cover; }
-.photo.fit-contain{ object-fit: contain; }
+/* Если изображения очень широкие — чуть аккуратнее на маленьких экранах */
+@media (max-width: 380px){
+  .photo{ max-height: 320px; }
+}
 
 .noPhoto{
   color: var(--muted);
@@ -199,13 +194,15 @@ body{
 /* ---------- item.html ---------- */
 .img{
   width:100%;
-  max-height: 320px;
+  height:auto;
+  max-height: 520px;
   object-fit: contain;
   border-radius: 12px;
   border: 1px solid var(--line);
   background: rgba(0,0,0,.2);
   display:block;
   padding: 6px;
+  margin: 0 auto;
 }
 
 .pre{
