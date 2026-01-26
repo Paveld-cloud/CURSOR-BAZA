@@ -52,7 +52,47 @@ function getCodeFromUrl() {
   return (u.searchParams.get("code") || "").trim().toLowerCase();
 }
 
-let CURRENT = { code: "", row: null };
+let CURRENT = { code: "", item: null };
+
+function renderItem(item) {
+  const name = item["наименование"] || "Без наименования";
+  const type = item["тип"] || "—";
+  const pn = item["парт номер"] || "—";
+  const oem = item["oem парт номер"] || item["oem"] || "—";
+  const qty = item["количество"] || "—";
+  const price = item["цена"] || "—";
+  const cur = item["валюта"] || "";
+  const mfg = item["изготовитель"] || "—";
+
+  const text = (item.text || "").trim();
+
+  box.innerHTML = `
+    <div class="item">
+      <div class="itemBody">
+        <div class="title">${esc(name)}</div>
+
+        <div class="meta">
+          <div><b>Тип:</b> ${esc(type)}</div>
+          <div><b>Part №:</b> ${esc(pn)}</div>
+          <div><b>OEM:</b> ${esc(oem)}</div>
+          <div><b>Количество:</b> ${esc(qty)}</div>
+          <div><b>Цена:</b> ${esc(price)} ${esc(cur)}</div>
+          <div><b>Изготовитель:</b> ${esc(mfg)}</div>
+        </div>
+
+        ${text ? `<div class="pre" style="margin-top:10px;">${esc(text)}</div>` : ""}
+      </div>
+    </div>
+  `;
+
+  const imageUrl = item.image_url || "";
+  if (imageUrl) {
+    img.src = imageUrl;
+    photoWrap.style.display = "block";
+  } else {
+    photoWrap.style.display = "none";
+  }
+}
 
 async function loadItem() {
   const code = getCodeFromUrl();
@@ -73,8 +113,11 @@ async function loadItem() {
   photoWrap.style.display = "none";
   issueBtn.disabled = true;
 
-  // ВАЖНО: нужен endpoint /api/item?code=...
-  const res = await fetch(`/api/item?code=${encodeURIComponent(code)}&user_id=${encodeURIComponent(userId())}`);
+  // backend отдаёт: { ok:true, item:{...} }
+  // используем /app/api/item (есть алиас /api/item, но так логичнее)
+  const res = await fetch(`/app/api/item?code=${encodeURIComponent(code)}&user_id=${encodeURIComponent(userId())}`, {
+    cache: "no-store"
+  });
   const data = await safeJson(res);
 
   if (envPill) envPill.textContent = "Online";
@@ -84,48 +127,20 @@ async function loadItem() {
     return;
   }
 
-  const row = data.row || null;
-  CURRENT.row = row;
-
-  // card_html если есть — рендерим как HTML (это у тебя уже формируется)
-  if (data.card_html) {
-    box.innerHTML = `
-      <div class="item">
-        <div class="item__sub">${data.card_html}</div>
-      </div>
-    `;
-  } else if (row) {
-    // запасной вариант — рендер из row
-    box.innerHTML = `
-      <div class="item">
-        <div class="item__title">${esc(row["наименование"] || "Без наименования")}</div>
-        <div class="item__sub">
-          <div><b>Тип:</b> ${esc(row["тип"] || "—")}</div>
-          <div><b>Part №:</b> ${esc(row["парт номер"] || "—")}</div>
-          <div><b>OEM:</b> ${esc(row["oem парт номер"] || row["oem"] || "—")}</div>
-          <div><b>Количество:</b> ${esc(row["количество"] || "—")}</div>
-          <div><b>Цена:</b> ${esc(row["цена"] || "—")} ${esc(row["валюта"] || "")}</div>
-          <div><b>Изготовитель:</b> ${esc(row["изготовитель"] || "—")}</div>
-        </div>
-      </div>
-    `;
-  } else {
+  const item = data.item || null;
+  if (!item) {
     setStatus("Данные по детали пустые", "error");
     return;
   }
 
-  // фото
-  if (data.image_url) {
-    img.src = data.image_url;
-    photoWrap.style.display = "block";
-  }
+  CURRENT.item = item;
+  renderItem(item);
 
   setStatus("", "ok");
   issueBtn.disabled = false;
 }
 
 backBtn.addEventListener("click", () => {
-  // возвращаемся в /app (главная mini app)
   window.location.href = "/app";
 });
 
@@ -154,7 +169,8 @@ issueBtn.addEventListener("click", async () => {
     comment: comment
   };
 
-  const res = await fetch("/api/issue", {
+  // у нас есть и /app/api/issue и /api/issue; используем /app/api/issue
+  const res = await fetch("/app/api/issue", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
@@ -169,8 +185,8 @@ issueBtn.addEventListener("click", async () => {
     return;
   }
 
-  setStatus("✅ Списание записано в История", "ok");
-  alert("✅ Списание записано в История");
+  setStatus("Списание записано в История", "ok");
+  alert("Списание записано в История");
 });
 
 loadItem();
