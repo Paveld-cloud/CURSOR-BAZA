@@ -12,6 +12,10 @@ WEBHOOK_SECRET_TOKEN = os.getenv("WEBHOOK_SECRET_TOKEN", "")
 
 PORT = int(os.getenv("PORT", "8080"))
 
+# Таймзона (важно для листа История и времени операций)
+# main.py ожидает TZ_NAME
+TZ_NAME = os.getenv("TZ_NAME", "Asia/Tashkent")
+
 # =========================
 # Google Sheets
 # =========================
@@ -28,7 +32,7 @@ HISTORY_SHEET = os.getenv("HISTORY_SHEET", "История")
 # Поиск и данные
 # =========================
 
-# Колонки, участвующие в поиске
+# Колонки, участвующие в поиске (логические ключи, которые использует data.py)
 SEARCH_FIELDS = [
     "code",
     "name",
@@ -72,10 +76,11 @@ SUPPORT_CONTACT = os.getenv("SUPPORT_CONTACT", "@support")
 # =========================
 # ВАЖНО: алиасы для data.py
 # =========================
-# data.py ожидает именно эти имена
-# ничего не ломаем, просто синхронизируем
+# data.py ожидает именно эти имена.
+# Ничего не ломаем — просто синхронизируем.
 
 SAP_SHEET_NAME = os.getenv("SAP_SHEET_NAME", SHEET_NAME)
 USERS_SHEET_NAME = os.getenv("USERS_SHEET_NAME", USERS_SHEET)
 
+# data.py ждёт SEARCH_COLUMNS
 SEARCH_COLUMNS = SEARCH_FIELDS
