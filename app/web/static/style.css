@@ -80,6 +80,15 @@ body{
   padding-top: calc(var(--sat) + var(--hdrTopPad));
   padding-bottom: 10px;
 
+left: 0;
+right: 0;
+width: 100vw;
+margin-left: calc(50% - 50vw);
+margin-right: calc(50% - 50vw);
+
+border-radius: 0 0 18px 18px;
+overflow: hidden;
+
   /* внутренние отступы (симметрия) */
   padding-left: var(--hdrInnerPad);
   padding-right: var(--hdrInnerPad);
