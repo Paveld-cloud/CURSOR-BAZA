@@ -75,11 +75,10 @@ body{
   padding-top: calc(var(--sat) + var(--hdrTopPad));
   padding-bottom: 10px;
 
-  /* full-bleed без “vw-щелей” */
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 100vw;
+  /* full-bleed внутри appShell (без уезда) */
+  margin-left: -12px;
+  margin-right: -12px;
+  width: auto;
 
   padding-left: var(--hdrInnerPad);
   padding-right: var(--hdrInnerPad);
