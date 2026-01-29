@@ -124,10 +124,10 @@ body{
 .appTopbar::after{
   content:"";
   position:absolute;
-  left:0;
-  right:0;
-  bottom:0;
-  height: 8px;
+  left:1;
+  right:1;
+  bottom:1;
+  height: 4px;
 
   background:
     linear-gradient(90deg,
