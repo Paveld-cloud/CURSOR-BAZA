@@ -80,10 +80,6 @@ body{
   padding-top: calc(var(--sat) + var(--hdrTopPad));
   padding-bottom: 10px;
 
-  /* растягиваем на всю ширину внутри appShell */
-  margin-left: -180px;
-  margin-right: -180px;
-
   /* внутренние отступы (симметрия) */
   padding-left: var(--hdrInnerPad);
   padding-right: var(--hdrInnerPad);
