@@ -81,8 +81,8 @@ body{
   padding-bottom: 10px;
 
   /* растягиваем на всю ширину внутри appShell */
-  margin-left: -12px;
-  margin-right: -12px;
+  margin-left: -18px;
+  margin-right: -18px;
 
   /* внутренние отступы (симметрия) */
   padding-left: var(--hdrInnerPad);
