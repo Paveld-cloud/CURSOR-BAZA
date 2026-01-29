@@ -32,8 +32,8 @@
 
   /* header geometry */
   --hdrRadius: 18px;
-  --hdrTopPad: 10px;   /* “прокладка” сверху (разделение с Telegram) */
-  --hdrInnerPad: 24px; /* шире/красивее по бокам */
+  --hdrTopPad: 10px;   /* разделение с Telegram */
+  --hdrInnerPad: 24px; /* боковые отступы в хедере */
 }
 
 *{ box-sizing:border-box; }
@@ -50,18 +50,14 @@ body{
     var(--bg);
 }
 
-/* =========================
-   Animations (subtle)
-========================= */
+/* subtle animation */
 @keyframes goldPulse{
   0% { box-shadow: 0 0 10px rgba(212,175,55,.20); }
   50% { box-shadow: 0 0 18px rgba(212,175,55,.34); }
   100% { box-shadow: 0 0 10px rgba(212,175,55,.20); }
 }
 
-/* =========================
-   App shell
-========================= */
+/* App shell */
 .appShell{
   max-width: 980px;
   margin: 0 auto;
@@ -69,7 +65,7 @@ body{
 }
 
 /* =========================
-   TOPBAR — symmetric corners + wider + more gold
+   TOPBAR — fixed (full width + symmetric corners)
 ========================= */
 .appTopbar{
   position: sticky;
@@ -80,16 +76,12 @@ body{
   padding-top: calc(var(--sat) + var(--hdrTopPad));
   padding-bottom: 10px;
 
-left: 0;
-right: 0;
-width: 100vw;
-margin-left: calc(50% - 50vw);
-margin-right: calc(50% - 50vw);
+  /* FULL-BLEED на всю ширину экрана (важно!) */
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
 
-border-radius: 0 0 18px 18px;
-overflow: hidden;
-
-  /* внутренние отступы (симметрия) */
+  /* внутренние отступы */
   padding-left: var(--hdrInnerPad);
   padding-right: var(--hdrInnerPad);
 
@@ -98,15 +90,12 @@ overflow: hidden;
   justify-content:space-between;
   gap: 10px;
 
-  /* симметричное скругление */
   border-radius: 0 0 var(--hdrRadius) var(--hdrRadius);
   overflow: hidden;
 
   background:
-    /* золотой ореол */
     radial-gradient(700px 220px at 18% 0%, rgba(212,175,55,.18), transparent 60%),
     radial-gradient(520px 240px at 90% 10%, rgba(212,175,55,.12), transparent 60%),
-    /* графит */
     linear-gradient(180deg, var(--hdrA) 0%, var(--hdrB) 58%, var(--hdrC) 100%);
 
   border-bottom: 1px solid rgba(212,175,55,.22);
@@ -115,7 +104,7 @@ overflow: hidden;
   animation: goldPulse 3.0s ease-in-out infinite;
 }
 
-/* верхняя “прокладка” — тоже со скруглением, чтобы НЕ косило края */
+/* верхняя прокладка — НЕ режет углы */
 .appTopbar::before{
   content:"";
   position:absolute;
@@ -123,21 +112,20 @@ overflow: hidden;
   right:0;
   top:0;
   height: var(--hdrTopPad);
-
   background: rgba(0,0,0,.46);
 
-  border-bottom-left-radius: 18px;
-  border-bottom-right-radius: 18px;
+  border-bottom-left-radius: var(--hdrRadius);
+  border-bottom-right-radius: var(--hdrRadius);
 
   pointer-events:none;
 }
 
-/* толстая золотая линия снизу — тоже со скруглением */
+/* золотая линия — до края и со скруглением */
 .appTopbar::after{
   content:"";
   position:absolute;
-  border-bottom-left-radius: 18px;
-  border-bottom-right-radius: 18px;
+  left:0;
+  right:0;
   bottom:0;
   height: 3px;
 
@@ -165,8 +153,7 @@ overflow: hidden;
   display:flex;
   align-items:center;
   justify-content:flex-end;
-  /* микросдвиг внутрь для идеальной симметрии на глаз */
-  margin-right: 2px;
+  margin-right: 2px; /* визуальная симметрия */
 }
 
 .appTopbar__title{
@@ -198,9 +185,7 @@ overflow: hidden;
 }
 .appFooter__text{ }
 
-/* =========================
-   Status badge (Online) — gold outline
-========================= */
+/* Online pill */
 .pill{
   display:inline-flex;
   align-items:center;
@@ -228,9 +213,7 @@ overflow: hidden;
   box-shadow: 0 0 6px rgba(34,197,94,.60);
 }
 
-/* =========================
-   Glass panels / cards
-========================= */
+/* Glass panels / cards */
 .card,
 .panel{
   position: relative;
@@ -354,9 +337,7 @@ overflow: hidden;
   .list{ grid-template-columns: 1fr 1fr; }
 }
 
-/* =========================
-   Result card
-========================= */
+/* Result card */
 .item{
   position: relative;
   border-radius: 20px;
@@ -451,9 +432,7 @@ overflow: hidden;
 }
 .btnRow .btn{ flex:1; }
 
-/* =========================
-   Detail page
-========================= */
+/* Detail page */
 .photoWrap{ margin-top: 10px; }
 .box{ margin-top: 10px; }
 .img{
