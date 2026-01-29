@@ -126,8 +126,8 @@ overflow: hidden;
 
   background: rgba(0,0,0,.46);
 
-  border-bottom-left-radius: var(--hdrRadius);
-  border-bottom-right-radius: var(--hdrRadius);
+  border-bottom-left-radius: 18px;
+  border-bottom-right-radius: 18px;
 
   pointer-events:none;
 }
@@ -136,8 +136,8 @@ overflow: hidden;
 .appTopbar::after{
   content:"";
   position:absolute;
-  left:0;
-  right:0;
+  border-bottom-left-radius: 18px;
+  border-bottom-right-radius: 18px;
   bottom:0;
   height: 3px;
 
