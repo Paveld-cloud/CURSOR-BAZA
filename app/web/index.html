@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>БАЗА MG</title>
+  <link rel="stylesheet" href="/static/style.css?v=10" />
+</head>
+<body>
+  <div class="appShell">
+
+    <!-- App header (под системную панель Telegram) -->
+    <header class="appTopbar">
+      <div class="appTopbar__left">
+        <div class="appTopbar__title">⚙️ БАЗА MG</div>
+        <div class="appTopbar__subtitle">Поиск деталей</div>
+      </div>
+      <div class="appTopbar__right">
+        <div id="statusPill" class="pill">Online</div>
+      </div>
+    </header>
+
+    <main class="appMain">
+      <section class="panel">
+        <label class="label">Поиск</label>
+
+        <div class="row">
+          <input id="q" class="input" placeholder="код / парт № / OEM / наименование" />
+        </div>
+
+        <div class="btnRowTop">
+          <button id="btn" class="btn">Искать</button>
+          <button id="clr" class="btn ghost">Очистить</button>
+        </div>
+
+        <div id="st" class="status"></div>
+      </section>
+
+      <div class="hint">
+        Пример:
+        <span class="chip">UZ000347</span>
+        или
+        <span class="chip">BALACLAVA</span>
+        или
+        <span class="chip">BANWEAR</span>
+      </div>
+
+      <div class="listTop">
+        <div class="section">Результаты</div>
+        <div id="cnt" class="count"></div>
+      </div>
+
+      <div id="list" class="list"></div>
+    </main>
+
+    <footer class="appFooter">
+      <div class="appFooter__text">БАЗА MG</div>
+    </footer>
+
+  </div>
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="/static/app.js?v=20260201_1"></script>
+</body>
+</html>
