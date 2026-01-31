@@ -57,6 +57,29 @@ body{
   100% { box-shadow: 0 0 10px rgba(212,175,55,.20); }
 }
 
+@keyframes cardIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* класс, который мы будем навешивать на карточку */
+.item.is-enter {
+  animation: cardIn .32s ease-out both;
+}
+
+/* если пользователь отключил анимации — не анимируем */
+@media (prefers-reduced-motion: reduce) {
+  .item.is-enter {
+    animation: none;
+  }
+}
+
 /* App shell */
 .appShell{
   max-width: 980px;
