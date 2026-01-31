@@ -1,3 +1,4 @@
+alert("NEW APP.JS LOADED cards_final_1");
 const tg = window.Telegram?.WebApp;
 if (tg) tg.expand();
 
