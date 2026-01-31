@@ -139,6 +139,13 @@ async function doSearch(){
 
   // рендер
   if (list) list.innerHTML = items.map(renderCard).join("");
+  // fade + slide появление карточек
+const cards = list.querySelectorAll(".item");
+cards.forEach((el, i) => {
+  el.classList.remove("is-enter");
+  el.style.animationDelay = `${i * 35}ms`; // лесенка (можно 0 если не надо)
+  el.classList.add("is-enter");
+});
 
   // авто-адаптив фото
   document.querySelectorAll(".photo").forEach(imgEl => {
