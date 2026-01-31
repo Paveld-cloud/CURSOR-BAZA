@@ -1,39 +1,32 @@
 :root{
-  --bg:#0b1220;
-  --muted:#9fb2d6;
-  --text:#eaf2ff;
+  --bg0:#070B14;
+  --bg1:#0B1220;
+  --bg2:#0A1D3A;
 
+  --text:#EAF2FF;
+  --muted:rgba(234,242,255,.70);
   --line:rgba(255,255,255,.10);
 
-  --cardA: rgba(255,255,255,.08);
-  --cardB: rgba(255,255,255,.04);
+  --cardA:rgba(255,255,255,.08);
+  --cardB:rgba(255,255,255,.03);
 
-  --btn:#2563eb;
-  --btn2:rgba(255,255,255,.10);
+  --blue:#3B82F6;
+  --blue2:#2563EB;
 
-  --shadow:0 16px 40px rgba(0,0,0,.40);
-  --shadow2:0 10px 22px rgba(0,0,0,.32);
+  --cyan:#22D3EE;
+  --green:#22C55E;
+
+  --glowBlue: rgba(59,130,246,.35);
+  --glowCyan: rgba(34,211,238,.35);
+  --glowGreen: rgba(34,197,94,.35);
 
   --radius:18px;
 
-  /* safe-area */
+  --shadow: 0 18px 60px rgba(0,0,0,.55);
+  --shadow2: 0 10px 26px rgba(0,0,0,.35);
+
   --sat: env(safe-area-inset-top, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
-
-  /* GM Gold */
-  --gold: rgba(212,175,55,1);        /* #D4AF37 */
-  --goldSoft: rgba(212,175,55,.60);
-  --goldLine: rgba(212,175,55,.45);
-
-  /* header base (graphite) */
-  --hdrA: #0f0f10;
-  --hdrB: #141416;
-  --hdrC: #18181b;
-
-  /* header geometry */
-  --hdrRadius: 18px;
-  --hdrTopPad: 10px;
-  --hdrInnerPad: 24px;
 }
 
 *{ box-sizing:border-box; }
@@ -42,291 +35,359 @@ html,body{ height:100%; }
 body{
   margin:0;
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-  background:
-    radial-gradient(1200px 600px at 50% -20%, rgba(212,175,55,.25), transparent 60%),
-    radial-gradient(900px 500px at 110% 10%, rgba(37,99,235,.18), transparent 55%),
-    radial-gradient(800px 500px at -10% 20%, rgba(20,184,166,.12), transparent 55%),
-    var(--bg);
   color: var(--text);
-  padding: 0;
+
+  background:
+    radial-gradient(900px 520px at 20% -10%, rgba(34,211,238,.18), transparent 60%),
+    radial-gradient(900px 520px at 110% 0%, rgba(59,130,246,.22), transparent 60%),
+    radial-gradient(900px 520px at 50% 120%, rgba(34,197,94,.12), transparent 60%),
+    linear-gradient(180deg, var(--bg0), var(--bg1) 45%, var(--bg2));
 }
 
-/* =========================
-   App shell
-========================= */
 .appShell{
   max-width: 980px;
   margin: 0 auto;
-  padding: 0 12px calc(18px + var(--sab));
+  padding-bottom: calc(18px + var(--sab));
 }
 
-/* =========================
-   TOPBAR
-========================= */
-.appTopbar{
+.topbar{
   position: sticky;
   top: 0;
-  z-index: 20;
-
-  padding: calc(var(--sat) + var(--hdrTopPad)) 0 10px;
-
-  background:
-    radial-gradient(900px 420px at 25% 0%, rgba(212,175,55,.18), transparent 60%),
-    linear-gradient(180deg, rgba(8,10,14,.95), rgba(8,10,14,.55)),
-    linear-gradient(180deg, var(--hdrA), var(--hdrC));
-  backdrop-filter: blur(8px);
-
+  z-index: 50;
+  padding: calc(10px + var(--sat)) 12px 10px;
+  backdrop-filter: blur(10px);
+  background: linear-gradient(180deg, rgba(7,11,20,.92), rgba(7,11,20,.55));
   border-bottom: 1px solid rgba(255,255,255,.06);
 }
 
-.appTopbar__le{
-  border: 1px solid rgba(255,255,255,.08);
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
-  border-radius: var(--hdrRadius);
-  padding: 14px var(--hdrInnerPad);
-
-  box-shadow: 0 20px 60px rgba(0,0,0,.45);
+.topbarInner{
+  border-radius: var(--radius);
+  border: 1px solid rgba(255,255,255,.10);
+  background: linear-gradient(180deg, var(--cardA), var(--cardB));
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
 }
 
-.appTopbar__left{
+.brandRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+}
+
+.brandTitle{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: .2px;
+}
+
+.gear{
+  filter: drop-shadow(0 0 18px rgba(34,211,238,.25));
+}
+
+.brandSub{
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.statusPill{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
+  box-shadow: 0 0 0 1px rgba(34,197,94,.10), 0 0 26px var(--glowGreen);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.statusPill .dot{
+  width: 10px; height:10px;
+  border-radius: 999px;
+  background: var(--green);
+  box-shadow: 0 0 0 4px rgba(34,197,94,.18), 0 0 22px var(--glowGreen);
+}
+
+.content{
+  padding: 12px;
   display:flex;
   flex-direction:column;
-  gap:4px;
-  min-width: 0;
+  gap: 12px;
 }
 
-.appTopbar__title{
-  font-size: 20px;
+.card{
+  border-radius: var(--radius);
+  border: 1px solid rgba(255,255,255,.10);
+  background: linear-gradient(180deg, var(--cardA), var(--cardB));
+  box-shadow: var(--shadow2);
+  padding: 14px;
+}
+
+.cardTitle{
+  font-size: 18px;
   font-weight: 900;
-  letter-spacing: .3px;
+  letter-spacing: .2px;
+  margin-bottom: 10px;
 }
 
-.appTopbar__subtitle{
-  font-size: 12px;
-  color: rgba(234,242,255,.70);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.appTopbar__right{
+.searchBox{
   display:flex;
-  align-items:center;
-  justify-content:flex-end;
-  gap: 8px;
-}
-
-.appMain{ padding-top: 12px; }
-
-.appFooter{
-  margin-top: 14px;
-  padding: 10px 2px;
-  color: rgba(255,255,255,.45);
-  font-size: 12px;
-}
-
-/* Online pill */
-.pill{
-  display:inline-flex;
-  align-items:center;
-  gap: 7px;
-  font-size: 12px;
-  padding: 7px 11px;
-  border-radius: 999px;
-
-  background: rgba(255,255,255,.05);
-  border: 1px solid rgba(212,175,55,.70);
-
-  color: rgba(255,255,255,.94);
-  box-shadow:
-    0 10px 18px rgba(0,0,0,.22),
-    0 0 0 3px rgba(212,175,55,.08);
-  white-space: nowrap;
-}
-.pill::before{
-  content:"";
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: #22c55e;
-  box-shadow: 0 0 0 3px rgba(34,197,94,.15);
-}
-
-/* =========================
-   SEARCH ROW
-========================= */
-.searchRow{
-  display:grid;
-  grid-template-columns: 1fr auto auto;
-  gap:10px;
-  align-items:center;
+  flex-direction:column;
+  gap: 10px;
 }
 
 .input{
-  width:100%;
-  padding: 12px 14px;
-  border-radius: 14px;
-  border:1px solid rgba(255,255,255,.10);
+  width: 100%;
+  padding: 14px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.10);
   background: rgba(255,255,255,.04);
   color: var(--text);
   outline: none;
+  font-size: 14px;
+  box-shadow: inset 0 0 0 1px rgba(59,130,246,.10);
 }
+
 .input::placeholder{ color: rgba(234,242,255,.55); }
 
+.btnRow{
+  display:flex;
+  gap: 10px;
+}
+
 .btn{
-  border:1px solid rgba(255,255,255,.10);
+  border: 1px solid rgba(255,255,255,.12);
   background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
   color: var(--text);
   padding: 12px 14px;
   border-radius: 14px;
-  box-shadow: var(--shadow2);
-  cursor:pointer;
+  cursor: pointer;
+  font-weight: 800;
+  letter-spacing: .2px;
+  box-shadow: 0 10px 22px rgba(0,0,0,.30);
 }
+
 .btn.primary{
-  background: linear-gradient(180deg, rgba(37,99,235,.95), rgba(37,99,235,.65));
-  border-color: rgba(37,99,235,.55);
+  background: linear-gradient(180deg, rgba(59,130,246,.98), rgba(37,99,235,.70));
+  border-color: rgba(59,130,246,.55);
+  box-shadow: 0 0 28px var(--glowBlue), 0 12px 26px rgba(0,0,0,.35);
 }
+
 .btn.ghost{
   background: rgba(255,255,255,.04);
 }
+
 .btn:active{ transform: translateY(1px); }
 
-.small{
+.hint{
+  margin-top: 10px;
+  color: var(--muted);
   font-size: 12px;
-  color: rgba(234,242,255,.70);
-  margin-top: 8px;
 }
 
-/* =========================
-   Results
-========================= */
+.mono{
+  font-family: "JetBrains Mono","Fira Code",Consolas,monospace;
+  letter-spacing: .3px;
+  color: rgba(234,242,255,.90);
+}
+
 .resultsHead{
-  margin: 14px 0 8px;
-  font-weight: 800;
-  letter-spacing: .2px;
-}
-
-.list{
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-}
-
-/* =========================
-   Card
-========================= */
-.item{
-  border: 1px solid rgba(255,255,255,.08);
-  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  overflow:hidden;
-}
-
-.itemPhoto{
-  padding: 14px;
-}
-.itemPhoto .photo{
-  width: 160px;
-  height: 160px;
-  object-fit: cover;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.04);
-  display:block;
-}
-.itemPhoto.noimg .noPhoto{
-  padding: 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.04);
-  color: rgba(234,242,255,.70);
-}
-
-.itemBody{
-  padding: 0 14px 14px;
-}
-
-/* ======== ВОТ ТУТ И БЫЛИ "ПЛАШКИ" ========
-   Это твой "КОД / ОСТАТОК" — он рисуется через .codeLine и .codeLine b
-   Я поменял ТОЛЬКО ТИПОГРАФИКУ под SAP/Siemens.
-*/
-.codeLine{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-
-  /* SAP / Siemens typography */
-  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: .2px;
-  color: rgba(255,255,255,.92);
-}
-
-.codeLine b{
-  display:inline-block;
-  padding: 6px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(212,175,55,.55);
-  background: linear-gradient(180deg, rgba(212,175,55,.22), rgba(212,175,55,.10));
-
-  /* SAP-like numeric style */
-  font-family: "JetBrains Mono","Fira Code",Consolas,monospace;
-  font-size: 12.5px;
-  font-weight: 650;
-  letter-spacing: .6px;
-  color: #fff;
-
-  box-shadow:
-    0 10px 18px rgba(0,0,0,.22),
-    0 0 0 3px rgba(212,175,55,.08);
-}
-
-.title{
-  font-size: 16px;
+  padding: 6px 2px;
   font-weight: 900;
   letter-spacing: .2px;
+}
+
+.count{
+  display:inline-flex;
+  min-width: 28px;
+  height: 28px;
+  align-items:center;
+  justify-content:center;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.05);
+  box-shadow: 0 0 22px rgba(34,211,238,.15);
+}
+
+.itemCard{
+  border-radius: var(--radius);
+  border: 1px solid rgba(255,255,255,.12);
+  background:
+    radial-gradient(680px 240px at 100% 0%, rgba(59,130,246,.20), transparent 60%),
+    radial-gradient(680px 240px at 0% 100%, rgba(34,211,238,.18), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
+  box-shadow: var(--shadow);
+  padding: 14px;
+}
+
+.itemTop{
+  display:flex;
+  justify-content:space-between;
+  gap: 10px;
+  flex-wrap:wrap;
   margin-bottom: 10px;
+}
+
+.kv{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  font-weight: 900;
+  letter-spacing: .2px;
+}
+
+.k{
+  opacity: .92;
+}
+
+.monoPill{
+  font-family: "JetBrains Mono","Fira Code",Consolas,monospace;
+  font-weight: 700;
+  letter-spacing: .6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.05);
+  box-shadow: 0 0 18px rgba(255,255,255,.06);
+}
+
+.monoPill--ok{
+  border-color: rgba(34,197,94,.35);
+  box-shadow: 0 0 26px var(--glowGreen);
+}
+
+.itemTitle{
+  font-size: 16px;
+  font-weight: 950;
+  letter-spacing: .2px;
+  margin-bottom: 12px;
+}
+
+.itemBody{
+  display:grid;
+  grid-template-columns: 160px 1fr;
+  gap: 12px;
+  align-items:start;
+}
+
+.thumb{
+  width: 160px;
+  height: 160px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.12);
+  overflow:hidden;
+  background: rgba(255,255,255,.03);
+  box-shadow: 0 0 28px rgba(34,211,238,.12);
+}
+
+.thumb img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
 }
 
 .meta{
-  display:grid;
-  gap: 6px;
-  color: rgba(234,242,255,.85);
-  font-size: 13px;
+  display:flex;
+  flex-direction:column;
+  gap: 10px;
 }
 
-.btnRow{
+.metaRow{
+  display:flex;
+  gap: 10px;
+  flex-wrap:wrap;
+}
+
+.tag{
+  display:inline-flex;
+  align-items:center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.05);
+  font-weight: 800;
+  color: rgba(234,242,255,.92);
+  box-shadow: 0 0 22px rgba(59,130,246,.12);
+}
+
+.tagDot{
+  width: 9px; height: 9px;
+  border-radius: 999px;
+  background: var(--green);
+  box-shadow: 0 0 0 4px rgba(34,197,94,.16), 0 0 20px var(--glowGreen);
+}
+
+.tagDot--cyan{
+  background: var(--cyan);
+  box-shadow: 0 0 0 4px rgba(34,211,238,.16), 0 0 20px var(--glowCyan);
+}
+
+.metaList{
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.18);
+}
+
+.metaList > div{
+  display:flex;
+  justify-content:space-between;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px dashed rgba(255,255,255,.08);
+}
+
+.metaList > div:last-child{
+  border-bottom: none;
+}
+
+.mK{
+  color: rgba(234,242,255,.70);
+  font-weight: 700;
+}
+
+.mV{
+  color: rgba(234,242,255,.95);
+  font-weight: 900;
+}
+
+.actions{
   display:flex;
   gap: 10px;
   margin-top: 12px;
 }
 
-/* =========================
-   Animations
-========================= */
-@keyframes cardIn{
-  from { opacity: 0; transform: translateY(18px); }
-  to   { opacity: 1; transform: translateY(0); }
+.wide{
+  flex:1;
 }
 
-.item{
-  opacity: 0;
-  transform: translateY(18px);
+.footer{
+  margin-top: 14px;
+  padding: 12px 0 0;
+  text-align:center;
+  color: rgba(234,242,255,.45);
+  font-size: 12px;
 }
 
-.item.is-enter{
-  animation: cardIn .32s ease-out both;
-  opacity: 1;
-  transform: translateY(0);
-}
-
-@media (prefers-reduced-motion: reduce){
-  .item{ opacity: 1; transform: none; }
-  .item.is-enter{ animation: none; opacity: 1; transform: none; }
+/* Mobile */
+@media (max-width: 520px){
+  .itemBody{
+    grid-template-columns: 1fr;
+  }
+  .thumb{
+    width: 100%;
+    height: 220px;
+  }
 }
 
