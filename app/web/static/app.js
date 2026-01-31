@@ -15,14 +15,6 @@ function userId() {
   return tg?.initDataUnsafe?.user?.id || 0;
 }
 
-function userName() {
-  const u = tg?.initDataUnsafe?.user;
-  if (!u) return "";
-  const fn = (u.first_name || "").trim();
-  const ln = (u.last_name || "").trim();
-  return (fn + " " + ln).trim() || (u.username ? "@"+u.username : "");
-}
-
 function esc(s){
   return String(s ?? "")
     .replaceAll("&","&amp;")
@@ -38,12 +30,6 @@ function get(it, keys, def="—"){
     }
   }
   return def;
-}
-
-function toNum(x){
-  const s = String(x ?? "").trim().replace(",", ".");
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
 }
 
 async function apiGet(url){
@@ -74,63 +60,54 @@ async function apiPost(url, body){
   return j ?? {};
 }
 
-function setStatus(text, kind="muted"){
-  st.textContent = text || "";
-  st.className = "small";
-  if (kind === "bad") st.style.color = "rgba(255,120,120,.95)";
-  else if (kind === "ok") st.style.color = "rgba(120,255,180,.95)";
-  else st.style.color = "rgba(234,242,255,.70)";
-}
-
-/* ===== Card renderer ===== */
+/* ===== Card renderer (ТВОЙ текущий шаблон, НЕ менял) ===== */
 function renderCard(it){
-  const name = esc(get(it, ["Наименование","наименование","Name","name","Title","title"]));
-  const code = esc(get(it, ["Код","код","Code","code"]));
-  const qty  = esc(get(it, ["Количество","количество","Qty","qty","Остаток","остаток"], "—"));
-  const unit = esc(get(it, ["Ед.изм","ед.изм","Unit","unit"], ""));
-  const typ  = esc(get(it, ["Тип","тип","Type","type"], ""));
-  const img  = get(it, ["image_url","image","img","photo","Фото","фото"], "");
+  const codeShow = get(it, ["код","code"], "—");
+  const codeSend = get(it, ["код","code"], "").toLowerCase();
+  const name = get(it, ["наименование","name"], "Без наименования");
 
-  const pillQty = (qty !== "—")
-    ? `<span class="pill gold">Остаток: ${qty}${unit ? " "+unit : ""}</span>`
-    : `<span class="pill">Остаток: —</span>`;
+  const type  = get(it, ["тип","type"]);
+  const part  = get(it, ["парт номер","part","part_number"]);
+  const oem   = get(it, ["oem","oem парт номер","OEM парт номер"]);
+  const qty   = get(it, ["количество","остаток","qty"]);
+  const price = get(it, ["цена","price"]);
+  const cur   = get(it, ["валюта","currency"]);
+  const mfg   = get(it, ["изготовитель","manufacturer"]);
 
-  const pillTyp = typ && typ !== "—"
-    ? `<span class="pill">Тип: ${typ}</span>`
-    : "";
-
-  const thumb = img
-    ? `<img src="${esc(img)}" alt="img" loading="lazy" />`
-    : `<div class="small" style="opacity:.7">нет фото</div>`;
+  const img = get(it, ["image_url","image","photo"], "");
 
   return `
-  <div class="item" data-code="${code}" data-name="${name}">
-    <div class="hd">
-      <div>
-        <div class="ttl">${name}</div>
-        <div class="sub">Код: <span data-copy="${code}" style="text-decoration:underline; cursor:pointer">${code}</span></div>
+    <div class="item">
+      <div class="itemPhoto ${img ? "" : "noimg"}">
+        ${
+          img
+            ? `<img class="photo" src="${esc(img)}" alt="Фото" loading="lazy">`
+            : `<div class="noPhoto">Фото не найдено</div>`
+        }
       </div>
-      <div class="badge">MG</div>
-    </div>
 
-    <div class="bd">
-      <div class="thumb">${thumb}</div>
-      <div class="meta">
-        <div class="row">
-          ${pillQty}
-          ${pillTyp}
+      <div class="itemBody">
+        <div class="codeLine">
+          <span>КОД: <b>${esc(codeShow)}</b></span>
+          <span>ОСТАТОК: <b>${esc(qty)}</b></span>
         </div>
-        <div class="row">
-          <span class="pill">Пользователь: ${esc(userName() || String(userId() || ""))}</span>
+
+        <div class="title">${esc(name)}</div>
+
+        <div class="meta">
+          <div><b>Тип:</b> ${esc(type)}</div>
+          <div><b>Part №:</b> ${esc(part)}</div>
+          <div><b>OEM:</b> ${esc(oem)}</div>
+          <div><b>Цена:</b> ${esc(price)} ${esc(cur)}</div>
+          <div><b>Изготовитель:</b> ${esc(mfg)}</div>
+        </div>
+
+        <div class="btnRow">
+          <button class="btn" data-issue="${esc(codeSend)}">📦 Взять деталь</button>
+          <button class="btn ghost" data-copy="${esc(codeShow)}">📋 Код</button>
         </div>
       </div>
     </div>
-
-    <div class="ft">
-      <button class="btn primary" data-issue="${code}">Взять деталь</button>
-      <a class="btn" href="/app/item?code=${encodeURIComponent(code)}&user_id=${encodeURIComponent(String(userId() || 0))}">Открыть</a>
-    </div>
-  </div>
   `;
 }
 
@@ -140,40 +117,40 @@ async function doSearch(){
   if (!query) {
     list.innerHTML = "";
     cnt.textContent = "0";
-    setStatus("Введите запрос", "muted");
+    st.textContent = "";
     return;
   }
 
-  setStatus("Поиск…", "muted");
+  st.textContent = "Поиск…";
 
   let data;
   try{
     const uid = userId();
     data = await apiGet(`/app/api/search?q=${encodeURIComponent(query)}&user_id=${encodeURIComponent(String(uid || 0))}`);
   }catch(e){
-    list.innerHTML = "";
+    list.innerHTML = `<div class="item is-enter"><div class="itemBody">Ошибка: ${esc(e.message)}</div></div>`;
     cnt.textContent = "0";
-    setStatus(`Ошибка: ${e.message}`, "bad");
+    st.textContent = "";
     return;
   }
 
   const items = Array.isArray(data?.items) ? data.items : [];
   cnt.textContent = String(items.length || 0);
+  st.textContent = "";
 
-  if (!items.length){
-    list.innerHTML = "";
-    setStatus("Ничего не найдено", "muted");
+  if (!items.length) {
+    list.innerHTML = `<div class="item is-enter"><div class="itemBody">Ничего не найдено</div></div>`;
     return;
   }
-
-  setStatus("Готово", "ok");
 
   /* render */
   list.innerHTML = items.map(renderCard).join("");
 
-  /* ===== FADE + SLIDE (ГАРАНТИРОВАННО) ===== */
+  /* ===== FADE + SLIDE (FIX) ===== */
   requestAnimationFrame(() => {
     const cards = list.querySelectorAll(".item");
+    console.log("cards animated:", cards.length);
+
     cards.forEach((el, i) => {
       el.style.animationDelay = `${i * 45}ms`; // лесенка
       el.classList.remove("is-enter");
@@ -189,7 +166,6 @@ async function doSearch(){
       try{
         navigator.clipboard?.writeText?.(v);
         tg?.HapticFeedback?.impactOccurred?.("light");
-        setStatus("Скопировано", "ok");
       }catch(_e){
         /* ignore */
       }
@@ -200,32 +176,28 @@ async function doSearch(){
   document.querySelectorAll("[data-issue]").forEach(el => {
     el.addEventListener("click", async () => {
       const code = el.getAttribute("data-issue") || "";
-      const card = el.closest(".item");
-      const name = card?.getAttribute("data-name") || "";
 
-      const qtyStr = prompt(`Сколько взять?\n${name}\nКод: ${code}`, "1");
+      const qtyStr = prompt(`Сколько взять?\nКод: ${code}`, "1");
       if (qtyStr === null) return;
-      const qty = toNum(qtyStr);
-      if (!qty || qty <= 0) {
+
+      const qty = Number(String(qtyStr).trim().replace(",", "."));
+      if (!Number.isFinite(qty) || qty <= 0) {
         alert("Введите корректное количество");
         return;
       }
 
       const comment = prompt("Комментарий (необязательно):", "") ?? "";
-      const ok = confirm(`Подтвердить списание?\n${name}\nКод: ${code}\nКол-во: ${qty}\nКомментарий: ${comment || "—"}`);
+      const ok = confirm(`Подтвердить списание?\nКод: ${code}\nКол-во: ${qty}\nКомментарий: ${comment || "—"}`);
       if (!ok) return;
 
       try{
         await apiPost("/app/api/issue", {
           user_id: userId(),
-          user_name: userName(),
-          name,
           code,
           qty,
           comment
         });
         tg?.HapticFeedback?.notificationOccurred?.("success");
-        setStatus("Списание сохранено", "ok");
       }catch(e){
         tg?.HapticFeedback?.notificationOccurred?.("error");
         alert(`Ошибка списания: ${e.message}`);
@@ -236,12 +208,13 @@ async function doSearch(){
 
 /* ===== Events ===== */
 btn?.addEventListener("click", doSearch);
+
 clr?.addEventListener("click", () => {
   q.value = "";
   q.focus();
   list.innerHTML = "";
   cnt.textContent = "0";
-  setStatus("", "muted");
+  st.textContent = "";
 });
 
 q?.addEventListener("keydown", (e) => {
@@ -250,5 +223,4 @@ q?.addEventListener("keydown", (e) => {
 
 /* Auto focus */
 try{ q?.focus(); }catch(_e){ /* ignore */ }
-
 
