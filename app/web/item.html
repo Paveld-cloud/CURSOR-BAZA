@@ -3,50 +3,149 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Описание — БАЗА MG</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260201_1" />
+  <title>Деталь · BAZA MG</title>
+
+  <!-- ВАЖНО: версию меняй при каждом деплое -->
+  <link rel="stylesheet" href="/static/style.css?v=ui_v1_neon" />
 </head>
+
 <body>
   <div class="appShell">
+    <!-- HEADER -->
+    <header class="topbar">
+      <div class="topbarInner">
+        <div class="brandRow">
+          <div class="brand">
+            <div class="brandTitle">
+              <span class="gear">⚙️</span>
+              <span>BAZA MG</span>
+            </div>
+            <div class="brandSub">Карточка детали</div>
+          </div>
 
-    <header class="appTopbar">
-      <div class="appTopbar__left">
-        <div class="appTopbar__title">Описание</div>
-        <div class="appTopbar__subtitle" id="codeLine">—</div>
-      </div>
-      <div class="appTopbar__right">
-        <div id="envPill" class="pill">Online</div>
+          <div class="statusPill">
+            <span class="dot"></span>
+            <span>Online</span>
+          </div>
+        </div>
       </div>
     </header>
 
-    <main class="appMain">
-      <section class="card">
-        <div id="status" class="status"></div>
+    <!-- CONTENT -->
+    <main class="content">
 
-        <div id="photoWrap" class="photoWrap" style="display:none;">
-          <img id="img" class="img" alt="Фото" />
-        </div>
-
-        <div id="box" class="box"></div>
-
-        <div class="actions">
-          <button id="issue" class="btn">📦 Взять деталь</button>
-          <button id="back" class="btn btn--ghost" type="button">Назад</button>
-        </div>
-
-        <div class="hint hint--mt">
-          Списание попадёт в лист <b>История</b>. Количество и комментарий запросит приложение.
+      <!-- TOP ACTIONS -->
+      <section class="card" style="padding:12px;">
+        <div class="btnRow" style="margin:0;">
+          <button class="btn ghost" id="backBtn">← Назад</button>
+          <button class="btn" id="copyBtn">📋 Копировать код</button>
         </div>
       </section>
+
+      <!-- ITEM CARD -->
+      <article class="itemCard" id="itemCard">
+
+        <!-- K/V line -->
+        <div class="itemTop">
+          <div class="kv">
+            <span class="k">КОД:</span>
+            <span class="v monoPill" id="codePill">uz000346</span>
+          </div>
+
+          <div class="kv">
+            <span class="k">ОСТАТОК:</span>
+            <span class="v monoPill monoPill--ok" id="qtyPill">15</span>
+          </div>
+        </div>
+
+        <!-- Title -->
+        <div class="itemTitle" id="title">BALACLAVA / ПОДШЛЕМНИК</div>
+
+        <!-- Body -->
+        <div class="itemBody">
+
+          <!-- Photo -->
+          <div class="thumb" id="thumb">
+            <img id="photo" src="https://via.placeholder.com/320x320.png?text=IMG" alt="Фото">
+          </div>
+
+          <!-- Meta -->
+          <div class="meta">
+            <div class="metaRow">
+              <span class="tag"><span class="tagDot"></span><span id="typeTag">Тип: BANWEAR 305</span></span>
+            </div>
+
+            <div class="metaRow">
+              <span class="tag"><span class="tagDot tagDot--cyan"></span><span id="userTag">Пользователь: Павел Дементьев</span></span>
+            </div>
+
+            <div class="metaList" id="metaList">
+              <div><span class="mK">Part №:</span> <span class="mV mono" id="partNo">UZ000346</span></div>
+              <div><span class="mK">OEM:</span> <span class="mV mono" id="oemNo">BANWEAR</span></div>
+              <div><span class="mK">Производитель:</span> <span class="mV" id="mfg">BANWEAR</span></div>
+              <div><span class="mK">Категория:</span> <span class="mV" id="cat">MG</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Description -->
+        <section class="card" style="margin-top:12px;">
+          <div class="cardTitle" style="margin-bottom:8px;">Описание</div>
+          <div class="desc" id="desc">
+            Тёплый подшлемник для работы в холодной зоне. Удобная посадка, закрывает шею и лицо.
+          </div>
+        </section>
+
+        <!-- Actions -->
+        <div class="actions">
+          <button class="btn primary wide" id="takeBtn">ВЗЯТЬ ДЕТАЛЬ</button>
+          <button class="btn wide" id="shareBtn">Поделиться</button>
+        </div>
+      </article>
+
+      <div class="footer">@Database1pav_bot</div>
     </main>
-
-    <footer class="appFooter">
-      <div class="appFooter__text">БАЗА MG</div>
-    </footer>
-
   </div>
 
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="/static/item.js?v=20260201_1"></script>
+  <!-- Позже подключишь твой item.js -->
+  <!-- <script src="/static/item.js?v=ui_v1_neon"></script> -->
+
+  <script>
+    // Минимальный UX без твоего backend:
+    document.getElementById("backBtn").addEventListener("click", () => history.back());
+
+    document.getElementById("copyBtn").addEventListener("click", async () => {
+      const code = document.getElementById("codePill").textContent.trim();
+      try{
+        await navigator.clipboard.writeText(code);
+        alert("Код скопирован: " + code);
+      }catch(e){
+        alert("Не удалось скопировать");
+      }
+    });
+
+    document.getElementById("takeBtn").addEventListener("click", () => {
+      const code = document.getElementById("codePill").textContent.trim();
+      const qty = prompt("Сколько взять? (код: " + code + ")", "1");
+      if (qty === null) return;
+      const ok = confirm("Подтвердить списание? Код: " + code + " Кол-во: " + qty);
+      if (!ok) return;
+      alert("Списание (демо): " + code + " x " + qty);
+    });
+
+    document.getElementById("shareBtn").addEventListener("click", () => {
+      alert("Поделиться (демо)");
+    });
+  </script>
+
+  <style>
+    /* Локально для item.html (аккуратное описание) */
+    .desc{
+      color: rgba(234,242,255,.85);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+  </style>
 </body>
 </html>
+
