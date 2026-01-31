@@ -70,7 +70,7 @@ body{
 
 /* класс, который мы будем навешивать на карточку */
 .item.is-enter {
-  animation: cardIn .32s ease-out both;
+  animation: cardIn .232s ease-out both;
 }
 
 /* если пользователь отключил анимации — не анимируем */
