@@ -1,155 +1,239 @@
-/* ===== Основной фон ===== */
-body{
-  margin:0;
-  background:#07111f;
-  font-family: Inter, system-ui, sans-serif;
-  color:white;
+/* ==========================================================================
+   GLOBAL FONT SYSTEM — SAP / SIEMENS STYLE
+   ========================================================================== */
+
+html, body, * {
+    font-family: "Inter", "Roboto", "Segoe UI", -apple-system, BlinkMacSystemFont,
+                 Oxygen, Ubuntu, Cantarell, "Open Sans", sans-serif !important;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: 0.1px;
+    color: #eaf2ff;
 }
 
-/* ===== Контейнер ===== */
-.appShell{
-  max-width:900px;
-  margin:auto;
+/* Заголовки */
+h1, h2, h3, h4, h5, .brandTitle, .cardTitle {
+    font-family: "Inter", sans-serif !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.2px;
 }
 
-/* ===== ШАПКА ===== */
-.topbar{
-  padding:14px;
-  background:rgba(0,0,0,.35);
-  backdrop-filter: blur(8px);
-}
-.topbarInner{
-  border-radius:16px;
-  padding:14px;
-  background:rgba(255,255,255,.06);
-}
-.brandRow{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-}
-.brandTitle{
-  font-size:22px;
-  font-weight:900;
-}
-.brandSub{
-  font-size:12px;
-  opacity:.6;
-}
-.statusPill{
-  display:flex;
-  gap:8px;
-  align-items:center;
-  padding:8px 12px;
-  background:rgba(255,255,255,.08);
-  border-radius:999px;
-}
-.statusPill .dot{
-  width:10px;height:10px;
-  background:#22c55e;
-  border-radius:999px;
+/* Подписи */
+label, .k {
+    font-weight: 600 !important;
 }
 
-/* ===== SEARCH ===== */
-.content{
-  padding:14px;
-}
-.card{
-  padding:14px;
-  background:rgba(255,255,255,.05);
-  border-radius:16px;
-}
-.cardTitle{
-  font-size:18px;
-  font-weight:800;
-  margin-bottom:10px;
-}
-.input{
-  width:100%;
-  padding:14px;
-  border-radius:14px;
-  border:1px solid rgba(255,255,255,.15);
-  background:rgba(0,0,0,.25);
-  color:white;
-}
-.btnRow{
-  margin-top:10px;
-  display:flex;
-  gap:10px;
-}
-.btn{
-  flex:1;
-  padding:12px;
-  border-radius:14px;
-  background:rgba(255,255,255,.12);
-  border:1px solid rgba(255,255,255,.2);
-  color:white;
-  font-weight:700;
-}
-.btn.primary{
-  background:linear-gradient(180deg,#3b82f6,#2563eb);
-}
-.hint{
-  font-size:12px;
-  opacity:.7;
-  margin-top:10px;
+/* Моноширинный шрифт (SAP Tech style) */
+.mono, .monoPill, .tgInfo .mono {
+    font-family: "JetBrains Mono", "Fira Mono", Consolas, monospace !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.1px !important;
 }
 
-/* ===== RESULTS ===== */
-.resultsHead{
-  margin-top:20px;
-  font-size:16px;
-  font-weight:900;
-  display:flex;
-  justify-content:space-between;
-}
-.count{
-  background:rgba(255,255,255,.15);
-  padding:4px 8px;
-  border-radius:12px;
+/* ==========================================================================
+   BASIC LAYOUT
+   ========================================================================== */
+
+body {
+    margin: 0;
+    background: #07111f;
+    color: #eaf2ff;
 }
 
-/* ============================================================
-   🔥🔥🔥   TELEGRAM-STYLE CARD (как на твоём примере)   🔥🔥🔥
-   ============================================================ */
-
-.tgCard{
-  margin-top:14px;
-  background:#0b1829;
-  border-radius:16px;
-  overflow:hidden;
-  border:1px solid rgba(255,255,255,.12);
-  box-shadow:0 6px 16px rgba(0,0,0,.4);
+.appShell {
+    max-width: 900px;
+    margin: auto;
 }
 
-.tgPhoto img{
-  width:100%;
-  height:auto;
-  display:block;
+/* ==========================================================================
+   TOP BAR
+   ========================================================================== */
+
+.topbar {
+    padding: 14px;
+    background: rgba(0, 0, 0, .35);
+    backdrop-filter: blur(8px);
 }
 
-.tgInfo{
-  padding:12px 14px;
-  font-size:14px;
-  line-height:1.45;
+.topbarInner {
+    border-radius: 16px;
+    padding: 14px;
+    background: rgba(255,255,255,0.06);
 }
 
-.tgInfo div{
-  margin-bottom:6px;
+.brandRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
-.actions{
-  display:flex;
-  gap:10px;
-  padding:12px;
+.brandTitle {
+    font-size: 22px;
+    font-weight: 800;
 }
 
-.btn.ghost{
-  background:rgba(255,255,255,.07);
+.brandSub {
+    font-size: 12px;
+    opacity: .65;
 }
 
-/* MOBILE FIX */
-@media(max-width:520px){
-  .tgInfo{ font-size:13px; }
+/* Status pill */
+.statusPill {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 12px;
+    background: rgba(255,255,255,.08);
+    border-radius: 999px;
 }
+
+.statusPill .dot {
+    width: 10px;
+    height: 10px;
+    background: #22c55e;
+    border-radius: 50%;
+}
+
+/* ==========================================================================
+   SEARCH SECTION
+   ========================================================================== */
+
+.content {
+    padding: 14px;
+}
+
+.card {
+    padding: 14px;
+    background: rgba(255,255,255,.05);
+    border-radius: 16px;
+}
+
+.cardTitle {
+    font-size: 18px;
+    font-weight: 800;
+    margin-bottom: 10px;
+}
+
+.input {
+    width: 100%;
+    padding: 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,.15);
+    background: rgba(0,0,0,.25);
+    color: #ffffff;
+}
+
+.btnRow {
+    margin-top: 10px;
+    display: flex;
+    gap: 10px;
+}
+
+.btn {
+    flex: 1;
+    padding: 12px;
+    border-radius: 14px;
+    background: rgba(255,255,255,.12);
+    border: 1px solid rgba(255,255,255,.2);
+    color: #fff;
+    font-weight: 700 !important;
+}
+
+.btn.primary {
+    background: linear-gradient(180deg,#3b82f6,#2563eb);
+}
+
+.btn.ghost {
+    background: rgba(255,255,255,.07);
+}
+
+.hint {
+    font-size: 12px;
+    opacity: .7;
+    margin-top: 10px;
+}
+
+/* ==========================================================================
+   RESULTS LIST
+   ========================================================================== */
+
+.resultsHead {
+    margin-top: 20px;
+    font-size: 16px;
+    font-weight: 900;
+    display: flex;
+    justify-content: space-between;
+}
+
+.count {
+    background: rgba(255,255,255,.15);
+    padding: 4px 8px;
+    border-radius: 12px;
+}
+
+/* ==========================================================================
+   TELEGRAM-STYLE CARD  (SAP-LIKE CLEAN UI)
+   ========================================================================== */
+
+.tgCard {
+    margin-top: 14px;
+    background: #0b1829;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,.12);
+    box-shadow: 0 6px 16px rgba(0,0,0,.35);
+}
+
+.tgPhoto img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.tgInfo {
+    padding: 12px 14px;
+    font-size: 15px !important;
+    line-height: 1.45;
+}
+
+.tgInfo b {
+    font-weight: 700 !important;
+}
+
+.tgInfo div {
+    margin-bottom: 6px;
+}
+
+/* Кнопки в карточке */
+.actions {
+    display: flex;
+    gap: 10px;
+    padding: 12px;
+}
+
+.btn.wide {
+    width: 100%;
+}
+
+/* ==========================================================================
+   MOBILE OPTIMIZATION (SAP RESPONSIVE)
+   ========================================================================== */
+
+@media (max-width: 520px) {
+
+    .tgInfo {
+        font-size: 14px !important;
+    }
+
+    .btn {
+        font-size: 14px !important;
+        padding: 12px !important;
+    }
+
+    .card {
+        padding: 12px !important;
+    }
+}
+
 
