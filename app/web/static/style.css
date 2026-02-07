@@ -1,332 +1,155 @@
-:root{
-  --bg:#0b1220;
-  --muted:#9fb2d6;
-  --text:#eaf2ff;
-
-  --line:rgba(255,255,255,.10);
-
-  --cardA: rgba(255,255,255,.08);
-  --cardB: rgba(255,255,255,.04);
-
-  --btn:#2563eb;
-  --btn2:rgba(255,255,255,.10);
-
-  --shadow:0 16px 40px rgba(0,0,0,.40);
-  --shadow2:0 10px 22px rgba(0,0,0,.32);
-
-  --radius:18px;
-
-  /* safe-area */
-  --sat: env(safe-area-inset-top, 0px);
-  --sab: env(safe-area-inset-bottom, 0px);
-
-  /* GM Gold */
-  --gold: rgba(212,175,55,1);        /* #D4AF37 */
-  --goldSoft: rgba(212,175,55,.60);
-  --goldLine: rgba(212,175,55,.45);
-
-  /* header base (graphite) */
-  --hdrA: #0f0f10;
-  --hdrB: #141416;
-  --hdrC: #18181b;
-
-  /* header geometry */
-  --hdrRadius: 18px;
-  --hdrTopPad: 10px;
-  --hdrInnerPad: 24px;
-}
-
-*{ box-sizing:border-box; }
-html,body{ height:100%; }
-
+/* ===== Основной фон ===== */
 body{
   margin:0;
-  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-  background:
-    radial-gradient(1200px 600px at 50% -20%, rgba(212,175,55,.25), transparent 60%),
-    radial-gradient(900px 500px at 110% 10%, rgba(37,99,235,.18), transparent 55%),
-    radial-gradient(800px 500px at -10% 20%, rgba(20,184,166,.12), transparent 55%),
-    var(--bg);
-  color: var(--text);
-  padding: 0;
+  background:#07111f;
+  font-family: Inter, system-ui, sans-serif;
+  color:white;
 }
 
-/* =========================
-   App shell
-========================= */
+/* ===== Контейнер ===== */
 .appShell{
-  max-width: 980px;
-  margin: 0 auto;
-  padding: 0 12px calc(18px + var(--sab));
+  max-width:900px;
+  margin:auto;
 }
 
-/* =========================
-   TOPBAR
-========================= */
-.appTopbar{
-  position: sticky;
-  top: 0;
-  z-index: 20;
-
-  padding: calc(var(--sat) + var(--hdrTopPad)) 0 10px;
-
-  background:
-    radial-gradient(900px 420px at 25% 0%, rgba(212,175,55,.18), transparent 60%),
-    linear-gradient(180deg, rgba(8,10,14,.95), rgba(8,10,14,.55)),
-    linear-gradient(180deg, var(--hdrA), var(--hdrC));
+/* ===== ШАПКА ===== */
+.topbar{
+  padding:14px;
+  background:rgba(0,0,0,.35);
   backdrop-filter: blur(8px);
-
-  border-bottom: 1px solid rgba(255,255,255,.06);
 }
-
-.appTopbar__le{
-  border: 1px solid rgba(255,255,255,.08);
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
-  border-radius: var(--hdrRadius);
-  padding: 14px var(--hdrInnerPad);
-
-  box-shadow: 0 20px 60px rgba(0,0,0,.45);
+.topbarInner{
+  border-radius:16px;
+  padding:14px;
+  background:rgba(255,255,255,.06);
 }
-
-.appTopbar__left{
+.brandRow{
   display:flex;
-  flex-direction:column;
-  gap:4px;
-  min-width: 0;
+  justify-content:space-between;
+  align-items:center;
 }
-
-.appTopbar__title{
-  font-size: 20px;
-  font-weight: 900;
-  letter-spacing: .3px;
+.brandTitle{
+  font-size:22px;
+  font-weight:900;
 }
-
-.appTopbar__subtitle{
-  font-size: 12px;
-  color: rgba(234,242,255,.70);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.brandSub{
+  font-size:12px;
+  opacity:.6;
 }
-
-.appTopbar__right{
+.statusPill{
   display:flex;
+  gap:8px;
   align-items:center;
-  justify-content:flex-end;
-  gap: 8px;
+  padding:8px 12px;
+  background:rgba(255,255,255,.08);
+  border-radius:999px;
+}
+.statusPill .dot{
+  width:10px;height:10px;
+  background:#22c55e;
+  border-radius:999px;
 }
 
-.appMain{ padding-top: 12px; }
-
-.appFooter{
-  margin-top: 14px;
-  padding: 10px 2px;
-  color: rgba(255,255,255,.45);
-  font-size: 12px;
+/* ===== SEARCH ===== */
+.content{
+  padding:14px;
 }
-
-/* Online pill */
-.pill{
-  display:inline-flex;
-  align-items:center;
-  gap: 7px;
-  font-size: 12px;
-  padding: 7px 11px;
-  border-radius: 999px;
-
-  background: rgba(255,255,255,.05);
-  border: 1px solid rgba(212,175,55,.70);
-
-  color: rgba(255,255,255,.94);
-  box-shadow:
-    0 10px 18px rgba(0,0,0,.22),
-    0 0 0 3px rgba(212,175,55,.08);
-  white-space: nowrap;
+.card{
+  padding:14px;
+  background:rgba(255,255,255,.05);
+  border-radius:16px;
 }
-.pill::before{
-  content:"";
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: #22c55e;
-  box-shadow: 0 0 0 3px rgba(34,197,94,.15);
+.cardTitle{
+  font-size:18px;
+  font-weight:800;
+  margin-bottom:10px;
 }
-
-/* =========================
-   SEARCH ROW
-========================= */
-.searchRow{
-  display:grid;
-  grid-template-columns: 1fr auto auto;
-  gap:10px;
-  align-items:center;
-}
-
 .input{
   width:100%;
-  padding: 12px 14px;
-  border-radius: 14px;
-  border:1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.04);
-  color: var(--text);
-  outline: none;
+  padding:14px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.15);
+  background:rgba(0,0,0,.25);
+  color:white;
 }
-.input::placeholder{ color: rgba(234,242,255,.55); }
-
-.btn{
-  border:1px solid rgba(255,255,255,.10);
-  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
-  color: var(--text);
-  padding: 12px 14px;
-  border-radius: 14px;
-  box-shadow: var(--shadow2);
-  cursor:pointer;
-}
-.btn.primary{
-  background: linear-gradient(180deg, rgba(37,99,235,.95), rgba(37,99,235,.65));
-  border-color: rgba(37,99,235,.55);
-}
-.btn.ghost{
-  background: rgba(255,255,255,.04);
-}
-.btn:active{ transform: translateY(1px); }
-
-.small{
-  font-size: 12px;
-  color: rgba(234,242,255,.70);
-  margin-top: 8px;
-}
-
-/* =========================
-   Results
-========================= */
-.resultsHead{
-  margin: 14px 0 8px;
-  font-weight: 800;
-  letter-spacing: .2px;
-}
-
-.list{
+.btnRow{
+  margin-top:10px;
   display:flex;
-  flex-direction:column;
   gap:10px;
 }
+.btn{
+  flex:1;
+  padding:12px;
+  border-radius:14px;
+  background:rgba(255,255,255,.12);
+  border:1px solid rgba(255,255,255,.2);
+  color:white;
+  font-weight:700;
+}
+.btn.primary{
+  background:linear-gradient(180deg,#3b82f6,#2563eb);
+}
+.hint{
+  font-size:12px;
+  opacity:.7;
+  margin-top:10px;
+}
 
-/* =========================
-   Card
-========================= */
-.item{
-  border: 1px solid rgba(255,255,255,.08);
-  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
+/* ===== RESULTS ===== */
+.resultsHead{
+  margin-top:20px;
+  font-size:16px;
+  font-weight:900;
+  display:flex;
+  justify-content:space-between;
+}
+.count{
+  background:rgba(255,255,255,.15);
+  padding:4px 8px;
+  border-radius:12px;
+}
+
+/* ============================================================
+   🔥🔥🔥   TELEGRAM-STYLE CARD (как на твоём примере)   🔥🔥🔥
+   ============================================================ */
+
+.tgCard{
+  margin-top:14px;
+  background:#0b1829;
+  border-radius:16px;
   overflow:hidden;
+  border:1px solid rgba(255,255,255,.12);
+  box-shadow:0 6px 16px rgba(0,0,0,.4);
 }
 
-.itemPhoto{
-  padding: 14px;
-}
-.itemPhoto .photo{
-  width: 160px;
-  height: 160px;
-  object-fit: cover;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.04);
+.tgPhoto img{
+  width:100%;
+  height:auto;
   display:block;
 }
-.itemPhoto.noimg .noPhoto{
-  padding: 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.04);
-  color: rgba(234,242,255,.70);
+
+.tgInfo{
+  padding:12px 14px;
+  font-size:14px;
+  line-height:1.45;
 }
 
-.itemBody{
-  padding: 0 14px 14px;
+.tgInfo div{
+  margin-bottom:6px;
 }
 
-/* ======== ВОТ ТУТ И БЫЛИ "ПЛАШКИ" ========
-   Это твой "КОД / ОСТАТОК" — он рисуется через .codeLine и .codeLine b
-   Я поменял ТОЛЬКО ТИПОГРАФИКУ под SAP/Siemens.
-*/
-.codeLine{
+.actions{
   display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-
-  /* SAP / Siemens typography */
-  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: .2px;
-  color: rgba(255,255,255,.92);
+  gap:10px;
+  padding:12px;
 }
 
-.codeLine b{
-  display:inline-block;
-  padding: 6px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(212,175,55,.55);
-  background: linear-gradient(180deg, rgba(212,175,55,.22), rgba(212,175,55,.10));
-
-  /* SAP-like numeric style */
-  font-family: "JetBrains Mono","Fira Code",Consolas,monospace;
-  font-size: 12.5px;
-  font-weight: 650;
-  letter-spacing: .6px;
-  color: #fff;
-
-  box-shadow:
-    0 10px 18px rgba(0,0,0,.22),
-    0 0 0 3px rgba(212,175,55,.08);
+.btn.ghost{
+  background:rgba(255,255,255,.07);
 }
 
-.title{
-  font-size: 16px;
-  font-weight: 900;
-  letter-spacing: .2px;
-  margin-bottom: 10px;
-}
-
-.meta{
-  display:grid;
-  gap: 6px;
-  color: rgba(234,242,255,.85);
-  font-size: 13px;
-}
-
-.btnRow{
-  display:flex;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-/* =========================
-   Animations
-========================= */
-@keyframes cardIn{
-  from { opacity: 0; transform: translateY(18px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.item{
-  opacity: 0;
-  transform: translateY(18px);
-}
-
-.item.is-enter{
-  animation: cardIn .32s ease-out both;
-  opacity: 1;
-  transform: translateY(0);
-}
-
-@media (prefers-reduced-motion: reduce){
-  .item{ opacity: 1; transform: none; }
-  .item.is-enter{ animation: none; opacity: 1; transform: none; }
+/* MOBILE FIX */
+@media(max-width:520px){
+  .tgInfo{ font-size:13px; }
 }
 
