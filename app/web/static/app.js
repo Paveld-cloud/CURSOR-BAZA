@@ -1,4 +1,4 @@
-/* BAZA MG — app.js (Search + Full fields render) */
+/* BAZA MG — app.js (Search + render with RU keys + price/currency) */
 
 const tg = window.Telegram?.WebApp;
 try { tg?.expand?.(); } catch (_) {}
@@ -74,17 +74,13 @@ function showInfo(text){
   setCount(0);
 }
 
-/* Автовытаскиваем все доп.поля */
+/* Доп.поля: убираем основные, остальные показываем */
 const SKIP_KEYS = new Set([
-  "code","Код","код","part_code","partCode","код детали",
-  "qty","остаток","Остаток","количество","Количество",
-  "name","наименование","Наименование","title","Название",
-  "type","тип","Тип",
-  "part_no","part","парт номер","Парт номер","Part №","part_number",
-  "oem","OEM","oem_part","OEM парт номер","oem парт номер",
-  "category","категория","Категория",
-  "image","photo","img","image_url","imageUrl",
-  "user","user_id","username","first_name","last_name",
+  "код","наименование","изготовитель","парт номер","парт номер ",
+  "oem парт номер","oem парт номер ",
+  "тип","количество","цена","валюта",
+  "image","image_url","oem",
+  "ok","q","user_id","count","items"
 ]);
 
 function extraFields(obj){
@@ -95,8 +91,6 @@ function extraFields(obj){
     if (v === null || v === undefined) continue;
     const s = String(v).trim();
     if (!s) continue;
-
-    // убираем слишком длинные поля в одну строку — покажем обрезанно
     out.push([k, s]);
   }
   return out;
@@ -104,22 +98,29 @@ function extraFields(obj){
 
 function buildItemUrl(code){
   const c = encodeURIComponent(code);
-  // если у тебя есть роут /item — ок, если нет — поменяем на item.html позже
   return `/item?code=${c}`;
 }
 
 function renderCard(item){
-  const code = normCode(pick(item, ["code","Код","код","part_code","partCode","код детали"], ""));
-  const qty  = pick(item, ["qty","остаток","Остаток","количество","Количество"], "—");
-  const name = pick(item, ["name","наименование","Наименование","title","Название"], "Без наименования");
+  // RU keys (как в твоём API)
+  const code = normCode(pick(item, ["код","code","Код"], ""));
+  const qty  = pick(item, ["количество","qty","остаток","Остаток"], "—");
+  const name = pick(item, ["наименование","name","title","Название"], "Без наименования");
 
-  const type = pick(item, ["type","тип","Тип"], "—");
-  const partNo = pick(item, ["part_no","part","парт номер","Парт номер","Part №","part_number"], "—");
-  const oem = pick(item, ["oem","OEM","oem_part","OEM парт номер","oem парт номер"], "—");
-  const category = pick(item, ["category","категория","Категория"], "—");
-  const mfg = pick(item, ["mfg","manufacturer","производитель","Производитель","brand","бренд"], "—");
+  const type = pick(item, ["тип","type","Тип"], "—");
+  const partNo = pick(item, ["парт номер","part_no","part","Part №","part_number"], "—");
+  const oemPartNo = pick(item, ["oem парт номер","OEM парт номер","oem_part"], "—");
 
-  const imageUrl = pick(item, ["image_url","image","photo","img","imageUrl"], "");
+  const maker = pick(item, ["изготовитель","производитель","manufacturer","mfg","brand"], "—");
+
+  // у тебя есть два поля: oem парт номер (banwear 305) и oem (fm)
+  const oemShort = pick(item, ["oem"], "");
+
+  const price = pick(item, ["цена"], "");
+  const currency = pick(item, ["валюта"], "");
+  const priceLine = (price || currency) ? `${price}${currency ? " " + currency : ""}` : "";
+
+  const imageUrl = pick(item, ["image_url","image"], "");
 
   const userName = getUserName() || "—";
 
@@ -129,14 +130,21 @@ function renderCard(item){
       <div style="font-weight:900; color: rgba(234,242,255,.85); border-bottom:1px dashed rgba(255,255,255,.10); padding-bottom:6px; margin-bottom:6px;">
         Доп. параметры
       </div>
-      ${extras.slice(0, 12).map(([k,v])=>`
+      ${extras.slice(0, 10).map(([k,v])=>`
         <div><span class="mK">${esc(k)}:</span> <span class="mV">${esc(v)}</span></div>
       `).join("")}
-      ${extras.length > 12 ? `
-        <div><span class="mK">…</span><span class="mV">ещё ${extras.length-12}</span></div>
-      ` : ""}
     </div>
   ` : "";
+
+  // В metaList показываем только то, что реально есть, без "Категория: —"
+  const rows = [];
+
+  rows.push(`<div><span class="mK">Part №:</span> <span class="mV mono">${esc(partNo)}</span></div>`);
+  rows.push(`<div><span class="mK">OEM Part №:</span> <span class="mV mono">${esc(oemPartNo)}</span></div>`);
+
+  if (oemShort) rows.push(`<div><span class="mK">OEM (код):</span> <span class="mV mono">${esc(oemShort)}</span></div>`);
+  if (maker && maker !== "—") rows.push(`<div><span class="mK">Изготовитель:</span> <span class="mV">${esc(maker)}</span></div>`);
+  if (priceLine) rows.push(`<div><span class="mK">Цена:</span> <span class="mV">${esc(priceLine)}</span></div>`);
 
   return `
     <article class="itemCard" data-code="${esc(code)}">
@@ -173,10 +181,7 @@ function renderCard(item){
           </div>
 
           <div class="metaList">
-            <div><span class="mK">Part №:</span> <span class="mV mono">${esc(partNo)}</span></div>
-            <div><span class="mK">OEM:</span> <span class="mV mono">${esc(oem)}</span></div>
-            <div><span class="mK">Производитель:</span> <span class="mV">${esc(mfg)}</span></div>
-            <div><span class="mK">Категория:</span> <span class="mV">${esc(category)}</span></div>
+            ${rows.join("")}
           </div>
 
           ${extrasHtml}
@@ -236,4 +241,5 @@ clr?.addEventListener("click", ()=>{
 });
 
 if(resultsList) showInfo("Введите запрос для поиска.");
+
 
