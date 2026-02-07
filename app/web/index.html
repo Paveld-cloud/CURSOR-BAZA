@@ -3,8 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>BAZA MG · UI Demo</title>
-  <link rel="stylesheet" href="/static/ui-demo.css?v=ui_demo_v1" />
+  <title>BAZA MG</title>
+
+  <!-- Дизайн как UI Demo -->
+  <link rel="stylesheet" href="/static/ui-demo.css?v=live_ui_1" />
 </head>
 <body>
   <div class="appShell">
@@ -13,7 +15,7 @@
         <div class="brandRow">
           <div class="brand">
             <div class="brandTitle"><span class="gear">⚙️</span><span>BAZA MG</span></div>
-            <div class="brandSub">Эталонный экран (UI Demo)</div>
+            <div class="brandSub">Поиск деталей</div>
           </div>
           <div class="statusPill"><span class="dot"></span><span>Online</span></div>
         </div>
@@ -23,62 +25,44 @@
     <main class="content">
       <section class="card">
         <div class="cardTitle">Поиск</div>
+
         <div class="searchBox">
-          <input class="input" placeholder="код / парт № / OEM / наименование" />
+          <!-- ВАЖНО: id=q -->
+          <input id="q" class="input" placeholder="код / парт № / OEM / наименование" />
+
           <div class="btnRow">
-            <button class="btn primary">Искать</button>
-            <button class="btn ghost">Очистить</button>
+            <!-- ВАЖНО: id=btn -->
+            <button id="btn" class="btn primary">Искать</button>
+            <!-- ВАЖНО: id=clr -->
+            <button id="clr" class="btn ghost">Очистить</button>
           </div>
         </div>
-        <div class="hint">Пример: <span class="mono">UZ000346</span> или <span class="mono">BALACLAVA</span> или <span class="mono">BANWEAR</span></div>
-        <div class="smallNote" style="margin-top:10px;">
+
+        <div class="hint">
+          Пример: <span class="mono">UZ000346</span> или <span class="mono">BALACLAVA</span> или <span class="mono">BANWEAR</span>
         </div>
+
+        <!-- статус/ошибки (app.js сам будет писать сюда карточки) -->
       </section>
 
-      <section>
+      <section class="results">
         <div class="resultsHead">
           <span>Результаты</span>
-          <span class="count">1</span>
+          <!-- ВАЖНО: class=count -->
+          <span class="count">0</span>
         </div>
 
-        <article class="itemCard">
-          <div class="itemTop">
-            <div class="kv"><span class="k">КОД:</span><span class="v monoPill">uz000346</span></div>
-            <div class="kv"><span class="k">ОСТАТОК:</span><span class="v monoPill monoPill--ok">15</span></div>
-          </div>
-
-          <div class="itemTitle">BALACLAVA / ПОДШЛЕМНИК</div>
-
-          <div class="itemBody">
-            <div class="thumb">
-              <img src="https://via.placeholder.com/220x220.png?text=IMG" alt="Фото" />
-            </div>
-
-            <div class="meta">
-              <div class="metaRow">
-                <span class="tag"><span class="tagDot"></span>Тип: BANWEAR 305</span>
-              </div>
-              <div class="metaRow">
-                <span class="tag"><span class="tagDot tagDot--cyan"></span>Пользователь: Павел Дементьев</span>
-              </div>
-
-              <div class="metaList">
-                <div><span class="mK">Part №:</span> <span class="mV mono">UZ000346</span></div>
-                <div><span class="mK">OEM:</span> <span class="mV mono">BANWEAR</span></div>
-                <div><span class="mK">Категория:</span> <span class="mV">MG</span></div>
-              </div>
-            </div>
-          </div>
-
-          <div class="actions">
-            <button class="btn primary wide">ВЗЯТЬ ДЕТАЛЬ</button>
-            <button class="btn wide">Открыть</button>
-          </div>
-        </article>
+        <!-- ВАЖНО: контейнер результатов -->
+        <div id="list" data-results style="display:flex;flex-direction:column;gap:12px;"></div>
 
         <div class="footer">@Database1pav_bot</div>
       </section>
     </main>
   </div>
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <!-- ВАЖНО: версию меняй, чтобы Telegram не держал старый JS -->
+  <script src="/static/app.js?v=live_app_1"></script>
 </body>
 </html>
