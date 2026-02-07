@@ -1,52 +1,61 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Описание — БАЗА MG</title>
-  <link rel="stylesheet" href="/static/style.css?v=10" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Деталь — BAZA MG</title>
+
+  <link rel="stylesheet" href="/static/style.css?v=item_v1">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
+
 <body>
   <div class="appShell">
 
-    <header class="appTopbar">
-      <div class="appTopbar__left">
-        <div class="appTopbar__title">Описание</div>
-        <div class="appTopbar__subtitle" id="codeLine">—</div>
-      </div>
-      <div class="appTopbar__right">
-        <div id="envPill" class="pill">Online</div>
+    <header class="topbar">
+      <div class="topbarInner">
+        <div class="brandRow">
+          <div class="brand">
+            <div class="brandTitle">⚙️ BAZA MG</div>
+            <div class="brandSub">Детальная карточка</div>
+          </div>
+          <div class="statusPill"><span class="dot"></span> Online</div>
+        </div>
       </div>
     </header>
 
-    <main class="appMain">
-      <section class="card">
-        <div id="status" class="status"></div>
+    <main class="content">
 
-        <div id="photoWrap" class="photoWrap" style="display:none;">
-          <img id="img" class="img" alt="Фото" />
+      <article class="tgCard">
+
+        <div class="tgPhoto">
+          <img id="photo" src="" alt="">
         </div>
 
-        <div id="box" class="box"></div>
+        <div class="tgInfo">
+
+          <div>🔷 <b>Код:</b> <span id="codePill">—</span></div>
+          <div>📝 <b>Наименование:</b> <span id="title">—</span></div>
+          <div>🔧 <b>Тип:</b> <span id="type">—</span></div>
+          <div>🧩 <b>Парт №:</b> <span id="partNo">—</span></div>
+          <div>📦 <b>OEM №:</b> <span id="oemNo">—</span></div>
+          <div>🔢 <b>Кол-во:</b> <span id="qty">—</span></div>
+          <div>💰 <b>Цена:</b> <span id="price">—</span></div>
+          <div>🏭 <b>Изготовитель:</b> <span id="mfg">—</span></div>
+          <div>🏷 <b>OEM:</b> <span id="oem">—</span></div>
+
+        </div>
 
         <div class="actions">
-          <button id="issue" class="btn">📦 Взять деталь</button>
-          <button id="back" class="btn btn--ghost" type="button">Назад</button>
+          <button class="btn primary" id="takeBtn">ВЗЯТЬ</button>
+          <button class="btn ghost" id="shareBtn">Переслать</button>
         </div>
 
-        <div class="hint hint--mt">
-          Списание попадёт в лист <b>История</b>. Количество и комментарий запросит приложение.
-        </div>
-      </section>
+      </article>
+
     </main>
-
-    <footer class="appFooter">
-      <div class="appFooter__text">БАЗА MG</div>
-    </footer>
-
   </div>
 
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="/static/item.js?v=20260201_1"></script>
+  <script src="/static/item.js?v=item_v1"></script>
 </body>
 </html>
