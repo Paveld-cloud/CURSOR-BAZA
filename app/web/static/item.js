@@ -1,63 +1,26 @@
-/* item.js — детальная карточка + пересылка в Telegram */
+document.getElementById("title").textContent = item["наименование"] || "";
 
-const tg = window.Telegram?.WebApp;
-try { tg.expand(); } catch(_){}
+document.getElementById("codePill").textContent =
+    normalizeValue(item["код"]);
 
-function esc(s){
-  return String(s ?? "").replace(/[&<>]/g, c => (
-    {"&":"&amp;","<":"&lt;",">":"&gt;"}[c]
-  ));
-}
+document.getElementById("type").textContent =
+    normalizeValue(item["тип"]);
 
-function getCode(){
-  const url = new URL(window.location.href);
-  return url.searchParams.get("code") || "";
-}
+document.getElementById("partNo").textContent =
+    normalizeValue(item["парт номер"]);
 
-async function loadItem(){
-  const code = getCode();
-  const r = await fetch(`/app/api/item?code=${encodeURIComponent(code)}`);
-  const data = await r.json();
+document.getElementById("oemNo").textContent =
+    normalizeValue(item["oem парт номер"]);
 
-  if(!data.ok){
-    tg.showAlert("Ошибка загрузки детали");
-    return;
-  }
+document.getElementById("qty").textContent =
+    normalizeValue(item["количество"]);
 
-  const item = data.item;
+document.getElementById("price").textContent =
+    normalizeValue(item["цена"]) + " " + normalizeValue(item["валюта"]);
 
-  document.getElementById("photo").src = item.image_url || item.image || "";
-  document.getElementById("title").textContent = item["наименование"] || "";
-  document.getElementById("codePill").textContent = item["код"] || "";
-  document.getElementById("type").textContent = item["тип"] || "";
-  document.getElementById("partNo").textContent = item["парт номер"] || "";
-  document.getElementById("oemNo").textContent = item["oem парт номер"] || "";
-  document.getElementById("qty").textContent = item["количество"] || "";
-  document.getElementById("price").textContent =
-    (item["цена"] || "") + " " + (item["валюта"] || "");
-  document.getElementById("mfg").textContent = item["изготовитель"] || "";
-  document.getElementById("oem").textContent = item["oem"] || "";
+document.getElementById("mfg").textContent =
+    normalizeValue(item["изготовитель"]);
 
-  // ========== Пересылка карточки ==========
-  document.getElementById("shareBtn").onclick = () => {
-
-    const text =
-`🔷 Код: ${item["код"]}
-📝 Наименование: ${item["наименование"]}
-🔧 Тип: ${item["тип"]}
-🧩 Парт №: ${item["парт номер"]}
-📦 OEM №: ${item["oem парт номер"]}
-🔢 Кол-во: ${item["количество"]}
-💰 Цена: ${item["цена"]} ${item["валюта"]}
-🏭 Изготовитель: ${item["изготовитель"]}
-🏷 OEM: ${item["oem"]}`;
-
-    Telegram.WebApp.openTelegramLink(
-      "https://t.me/share/url?text=" + encodeURIComponent(text)
-    );
-  };
-}
-
-loadItem();
-
+document.getElementById("oem").textContent =
+    normalizeValue(item["oem"]);
 
