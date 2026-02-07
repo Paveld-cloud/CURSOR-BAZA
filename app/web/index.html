@@ -5,35 +5,33 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>BAZA MG</title>
 
-  <!-- Дизайн как UI Demo -->
-  <link rel="stylesheet" href="/static/ui-demo.css?v=live_ui_1" />
+  <link rel="stylesheet" href="/static/style.css?v=tg_card_v1" />
 </head>
+
 <body>
   <div class="appShell">
+
     <header class="topbar">
       <div class="topbarInner">
         <div class="brandRow">
           <div class="brand">
-            <div class="brandTitle"><span class="gear">⚙️</span><span>BAZA MG</span></div>
+            <div class="brandTitle"><span class="gear">⚙️</span> BAZA MG</div>
             <div class="brandSub">Поиск деталей</div>
           </div>
-          <div class="statusPill"><span class="dot"></span><span>Online</span></div>
+          <div class="statusPill"><span class="dot"></span> Online</div>
         </div>
       </div>
     </header>
 
     <main class="content">
+
       <section class="card">
         <div class="cardTitle">Поиск</div>
 
         <div class="searchBox">
-          <!-- ВАЖНО: id=q -->
           <input id="q" class="input" placeholder="код / парт № / OEM / наименование" />
-
           <div class="btnRow">
-            <!-- ВАЖНО: id=btn -->
             <button id="btn" class="btn primary">Искать</button>
-            <!-- ВАЖНО: id=clr -->
             <button id="clr" class="btn ghost">Очистить</button>
           </div>
         </div>
@@ -42,27 +40,23 @@
           Пример: <span class="mono">UZ000346</span> или <span class="mono">BALACLAVA</span> или <span class="mono">BANWEAR</span>
         </div>
 
-        <!-- статус/ошибки (app.js сам будет писать сюда карточки) -->
       </section>
 
       <section class="results">
         <div class="resultsHead">
           <span>Результаты</span>
-          <!-- ВАЖНО: class=count -->
           <span class="count">0</span>
         </div>
 
-        <!-- ВАЖНО: контейнер результатов -->
-        <div id="list" data-results style="display:flex;flex-direction:column;gap:12px;"></div>
-
+        <div id="list" data-results></div>
         <div class="footer">@Database1pav_bot</div>
       </section>
+
     </main>
   </div>
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="/static/app.js?v=tg_card_v1"></script>
 
-  <!-- ВАЖНО: версию меняй, чтобы Telegram не держал старый JS -->
-  <script src="/static/app.js?v=live_app_1"></script>
 </body>
 </html>
