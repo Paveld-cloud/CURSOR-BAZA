@@ -1,4 +1,4 @@
-/* item.js — детальная карточка + пересылка + нормализация регистра */
+/* item.js — детальная карточка + пересылка + полная нормализация регистра */
 
 const tg = window.Telegram?.WebApp;
 try { tg.expand(); } catch(_){}
@@ -9,19 +9,16 @@ function esc(s){
   ));
 }
 
-/* Универсальная нормализация */
-function normalizeValue(v) {
-    if (!v) return "";
-    return String(v).trim().toUpperCase();
+/* ВСЕГДА делаем верхний регистр */
+function U(v){
+    return String(v || "").trim().toUpperCase();
 }
 
-/* Получение кода детали из URL */
 function getCode(){
   const url = new URL(window.location.href);
   return url.searchParams.get("code") || "";
 }
 
-/* Загрузка детали с backend */
 async function loadItem(){
   const code = getCode();
   const r = await fetch(`/app/api/item?code=${encodeURIComponent(code)}`);
@@ -37,38 +34,35 @@ async function loadItem(){
   /* Фото */
   document.getElementById("photo").src = item.image_url || item.image || "";
 
-  /* Заголовок остаётся как есть — названия у тебя бывают в смешанном стиле */
+  /* Наименование оставляем как есть (оно может быть сложным/двухъязычным) */
   document.getElementById("title").textContent = item["наименование"] || "";
 
-  /* Технические поля — ВСЕГДА В ВЕРХНЕМ РЕГИСТРЕ */
-  document.getElementById("codePill").textContent = normalizeValue(item["код"]);
-  document.getElementById("type").textContent = normalizeValue(item["тип"]);
-  document.getElementById("partNo").textContent = normalizeValue(item["парт номер"]);
-  document.getElementById("oemNo").textContent = normalizeValue(item["oem парт номер"]);
-  document.getElementById("qty").textContent = normalizeValue(item["количество"]);
-  document.getElementById("price").textContent =
-      normalizeValue(item["цена"]) + " " + normalizeValue(item["валюта"]);
-  document.getElementById("mfg").textContent = normalizeValue(item["изготовитель"]);
-  document.getElementById("oem").textContent = normalizeValue(item["oem"]);
+  /* ВСЕ технические параметры — строго верхний регистр */
+  document.getElementById("codePill").textContent = U(item["код"]);
+  document.getElementById("type").textContent = U(item["тип"]);
+  document.getElementById("partNo").textContent = U(item["парт номер"]);
+  document.getElementById("oemNo").textContent = U(item["oem парт номер"]);
+  document.getElementById("qty").textContent = U(item["количество"]);
+  document.getElementById("price").textContent = U(item["цена"]) + " " + U(item["валюта"]);
+  document.getElementById("mfg").textContent = U(item["изготовитель"]);
+  document.getElementById("oem").textContent = U(item["oem"]);
 
-  /* ===== КНОПКА «ПЕРЕСЛАТЬ» ===== */
+  /* ========== ПЕРЕСЫЛКА В TELEGRAM ========== */
   document.getElementById("shareBtn").onclick = () => {
 
-    /* Формируем Telegram-сообщение в нужном стиле */
     const text =
-`🔷 КОД: ${normalizeValue(item["код"])}
+`🔷 КОД: ${U(item["код"])}
 📝 НАИМЕНОВАНИЕ: ${item["наименование"]}
-🔧 ТИП: ${normalizeValue(item["тип"])}
-🧩 ПАРТ №: ${normalizeValue(item["парт номер"])}
-📦 OEM №: ${normalizeValue(item["oem парт номер"])}
-🔢 КОЛ-ВО: ${normalizeValue(item["количество"])}
-💰 ЦЕНА: ${normalizeValue(item["цена"])} ${normalizeValue(item["валюта"])}
-🏭 ИЗГОТОВИТЕЛЬ: ${normalizeValue(item["изготовитель"])}
-🏷 OEM: ${normalizeValue(item["oem"])}`;
+🔧 ТИП: ${U(item["тип"])}
+🧩 ПАРТ №: ${U(item["парт номер"])}
+📦 OEM №: ${U(item["oem парт номер"])}
+🔢 КОЛ-ВО: ${U(item["количество"])}
+💰 ЦЕНА: ${U(item["цена"])} ${U(item["валюта"])}
+🏭 ИЗГОТОВИТЕЛЬ: ${U(item["изготовитель"])}
+🏷 OEM: ${U(item["oem"])}`;
 
-    /* Открываем окно пересылки в Telegram */
     Telegram.WebApp.openTelegramLink(
-      "https://t.me/share/url?text=" + encodeURIComponent(text)
+        "https://t.me/share/url?text=" + encodeURIComponent(text)
     );
   };
 }
