@@ -1,8 +1,8 @@
 # ============================================================
-#  data.py — Variant B (полностью переписанная чистая версия)
-#  Полная совместимость с Telegram-ботом и Mini-App
-#  Поиск: строгий код → парт → OEM → расширенный индекс → fallback
-#  Изображения: поиск по всем ссылкам image
+#   data.py — Финальная продакшен-версия (полностью совместима)
+#   Поиск: strict code → part → OEM → SEARCH_COLUMNS → fallback
+#   Изображения: поиск по всему столбцу image
+#   Telegram Bot + Mini App совместимость
 # ============================================================
 
 import os
@@ -24,46 +24,59 @@ from zoneinfo import ZoneInfo
 logger = logging.getLogger("bot.data")
 
 # ---------------- CONFIG ----------------
-from app.config import (
-    SPREADSHEET_URL,
-    SAP_SHEET_NAME,
-    USERS_SHEET_NAME,
-    DATA_TTL,
-    SEARCH_COLUMNS,
-)
+try:
+    from app.config import (
+        SPREADSHEET_URL,
+        SAP_SHEET_NAME,
+        USERS_SHEET_NAME,
+        DATA_TTL,
+        SEARCH_COLUMNS,
+    )
+except Exception:
+    SPREADSHEET_URL = os.getenv("SPREADSHEET_URL", "")
+    SAP_SHEET_NAME = os.getenv("SAP_SHEET_NAME", "SAP")
+    USERS_SHEET_NAME = os.getenv("USERS_SHEET_NAME", "Пользователи")
+    DATA_TTL = int(os.getenv("DATA_TTL", "600"))
+
+    SEARCH_COLUMNS = [
+        "тип",
+        "наименование",
+        "код",
+        "oem",
+        "изготовитель",
+        "парт номер",
+        "oem парт номер",
+    ]
 
 GOOGLE_APPLICATION_CREDENTIALS_JSON = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# ---------------- GLOBAL STATE ----------------
+# ---------------- GLOBAL ----------------
 df: Optional[pd.DataFrame] = None
 _last_load_ts: float = 0
 
-# Индексы
 _search_index: Dict[str, Set[int]] = {}
-_image_links: List[str] = []
+_image_index: Dict[str, List[str]] = {}
 
-# Пользователи
 SHEET_ALLOWED: Set[int] = set()
 SHEET_ADMINS: Set[int] = set()
 SHEET_BLOCKED: Set[int] = set()
 
-# Состояние списаний
 user_state: Dict[int, dict] = {}
 issue_state: Dict[int, dict] = {}
 
 ASK_QUANTITY, ASK_COMMENT, ASK_CONFIRM = range(3)
 
 # ============================================================
-#                    Н О Р М А Л И З А Ц И Я
+#                    NORMALIZATION
 # ============================================================
 
 def norm_code(val: str) -> str:
     """
-    Нормализация кодов и парт-номеров:
+    Приводит любой код к унифицированному виду:
     - нижний регистр
     - O → 0
-    - только a-z0-9
+    - убираем всё кроме a-z0-9
     """
     s = str(val or "").strip().lower()
     s = s.replace("o", "0")
@@ -71,21 +84,32 @@ def norm_code(val: str) -> str:
 
 
 def norm_text(val: str) -> str:
-    """Общая нормализация текста для индекса."""
+    """Упрощённая нормализация."""
     return str(val or "").strip().lower()
 
 
 def squash(val: str) -> str:
-    """Убираем все не-буквы/цифры для fallback-поиска."""
+    """Удаляет спецсимволы полностью."""
     return re.sub(r"[\W_]+", "", str(val or "").lower())
 
 
 def tokenize(val: str) -> List[str]:
-    """Токены a-z0-9."""
     return re.findall(r"[a-z0-9]+", str(val or "").lower())
 
+
+# --- ВАЖНО: для Mini App (совместимость с webapp.py) ---
+def normalize(text: str) -> str:
+    """
+    Используется Mini-App.
+    Убирает спецсимволы, приводит к нижнему регистру, оставляет буквы/цифры/пробелы.
+    """
+    text = str(text or "").lower()
+    text = re.sub(r"[^\w\s]", "", text)
+    return text.strip()
+
+
 # ============================================================
-#               G O O G L E   S H E E T S
+#                 GOOGLE SHEETS LOADER
 # ============================================================
 
 def gs_client():
@@ -97,7 +121,7 @@ def gs_client():
 def load_sap_df() -> pd.DataFrame:
     """
     Загружаем SAP-лист ТАК, как он отображён в Google Sheets.
-    Это гарантирует точное совпадение цены.
+    Полная совместимость с ценами и текстами.
     """
     sh = gs_client().open_by_url(SPREADSHEET_URL)
     ws = sh.worksheet(SAP_SHEET_NAME)
@@ -109,7 +133,7 @@ def load_sap_df() -> pd.DataFrame:
     headers = [h.strip().lower() for h in values[0]]
     df_new = pd.DataFrame(values[1:], columns=headers)
 
-    # Нормализация технических полей
+    # Нормализация ключевых полей
     for col in ("код", "парт номер", "oem парт номер", "oem"):
         if col in df_new.columns:
             df_new[col] = df_new[col].astype(str).str.strip().str.lower()
@@ -119,665 +143,574 @@ def load_sap_df() -> pd.DataFrame:
 
     return df_new
 # ============================================================
-#                        И Н Д Е К С Ы
+#                 INDEX BUILDERS (SEARCH + IMAGE)
 # ============================================================
 
-def build_search_index(df_: pd.DataFrame):
+def build_search_index(df_: pd.DataFrame) -> Dict[str, Set[int]]:
     """
-    Индексируется ВСЁ, что перечислено в SEARCH_COLUMNS.
-    Каждое значение разбивается на токены (a-z0-9).
-    И создаётся карта token → set(row_index)
+    Строит глобальный поисковый индекс.
+    Поддерживает:
+    - код
+    - парт номер
+    - OEM парт номер
+    - тип, наименование, oem, изготовитель
+    Поля определяются через SEARCH_COLUMNS.
     """
-    global _search_index
-    _search_index = {}
+    index: Dict[str, Set[int]] = {}
+    cols = [c for c in SEARCH_COLUMNS if c in df_.columns]
 
     for i, row in df_.iterrows():
-        for col in SEARCH_COLUMNS:
-            if col not in df_.columns:
-                continue
-            value = str(row.get(col, "")).lower()
+        for col in cols:
+            raw = str(row.get(col, "")).lower()
 
-            # Токены по полю
-            for t in tokenize(value):
-                key = norm_code(t)
+            # Для кодов нормализуем отдельно
+            if col in ("код", "парт номер", "oem парт номер"):
+                key = norm_code(raw)
                 if key:
-                    _search_index.setdefault(key, set()).add(i)
+                    index.setdefault(key, set()).add(i)
+
+            # Токены общего текста
+            for tok in tokenize(raw):
+                index.setdefault(tok, set()).add(i)
+
+    return index
 
 
-# ============================================================
-#                И Н Д Е К С   К А Р Т И Н О К
-# ============================================================
+# ------------------------------------------------------------
+#                 IMAGE INDEX (strict match)
+# ------------------------------------------------------------
 
-def build_image_index(df_: pd.DataFrame):
+def _image_tokens(url: str) -> List[str]:
     """
-    Mini-App должен находить фото строго по коду детали,
-    даже если код НЕ совпадает со строкой таблицы.
-    Поэтому мы НЕ привязываемся к строкам:
-
-    ➤ Собираем список всех ссылок image (даже если они ошибочно стоят в другой строке)
-    ➤ При поиске: сравниваем norm_code(code) с токенами имени файла
+    Извлекает токены из имени файла.
+    Например:
+    https://.../UZ000664.jpg → ["uz000664"]
     """
-    global _image_links
-    _image_links = []
+    try:
+        name = url.strip().lower().split("/")[-1]
+        name = name.split("?")[0]
+        name = name.split(".")[0]
+        return tokenize(name)
+    except Exception:
+        return []
 
+
+def build_image_index(df_: pd.DataFrame) -> Dict[str, List[str]]:
+    """
+    Индекс изображений:
+    key = norm_code(токен)
+    value = список URL, где найдено совпадение.
+    """
+    index: Dict[str, List[str]] = {}
     if "image" not in df_.columns:
-        return
+        return index
 
     for _, row in df_.iterrows():
-        img = str(row.get("image", "")).strip()
-        if img:
-            _image_links.append(img)
+        url = str(row.get("image", "")).strip()
+        if not url:
+            continue
 
+        tokens = _image_tokens(url)
+        for tok in tokens:
+            key = norm_code(tok)
+            if len(key) >= 3:   # отбрасываем мусор
+                index.setdefault(key, []).append(url)
 
-async def resolve_image_url_async(url: str) -> str:
-    """
-    Приводим URL к прямому виду:
-    - ibb.co → i.ibb.co
-    - Google Drive → прямой доступ
-    """
-    if not url:
-        return ""
+        # Также ключ = склеенное имя
+        join_key = "".join(tokens)
+        if len(join_key) >= 3:
+            index.setdefault(join_key, []).append(url)
 
-    # ---- ibb ----
-    if "ibb.co" in url and not "i.ibb.co" in url:
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=8) as r:
-                    html = await r.text()
-            import re
-            m = re.search(
-                r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
-                html, re.I
-            )
-            if m:
-                return m.group(1)
-        except Exception:
-            pass
-
-    # ---- Drive ----
-    if "drive.google.com" in url:
-        m = re.search(
-            r"file/d/([-\w]{15,})|open\?id=([-\w]{15,})",
-            url
-        )
-        if m:
-            file_id = m.group(1) or m.group(2)
-            return f"https://drive.google.com/uc?export=download&id={file_id}"
-
-    return url
-
-
-async def find_image_by_code_async(code: str) -> str:
-    """
-    Ищем КОД в имени файла КАЖДОЙ ссылки image.
-    Это ключевое отличие Mini-App: работа НЕ по строкам, а по всему столбцу.
-    """
-    key = norm_code(code)
-    if not key:
-        return ""
-
-    for url in _image_links:
-        name = "".join(tokenize(url))
-        if key in name:
-            return await resolve_image_url_async(url)
-
-    return ""
+    return index
 
 
 # ============================================================
-#                   З А Г Р У З К А   Д А Н Н Ы Х
+#          LOAD + REFRESH (ensure_fresh_data)
 # ============================================================
 
-def ensure_fresh_data(force=False):
+def ensure_fresh_data(force: bool = False):
     """
-    Полная загрузка Google Sheets + индексы.
+    Обновляет DataFrame и индексы, если TTL истёк.
     """
-    global df, _last_load_ts
-    need = force or df is None or (time.time() - _last_load_ts > DATA_TTL)
+    global df, _search_index, _image_index, _last_load_ts
 
-    if not need:
+    need_reload = force or df is None or (time.time() - _last_load_ts > DATA_TTL)
+    if not need_reload:
         return
 
+    logger.info("📥 Обновление SAP-данных из Google Sheets...")
     df_new = load_sap_df()
 
-    build_search_index(df_new)
-    build_image_index(df_new)
-
     df = df_new
+    _search_index = build_search_index(df)
+    _image_index = build_image_index(df)
+
     _last_load_ts = time.time()
-
-    logger.info(f"✔ Загружено {len(df)} строк, индексы обновлены")
-
-
+    logger.info(f"✅ Загружено {len(df)} строк, индексов: search={len(_search_index)}, images={len(_image_index)}")
 # ============================================================
-#               П Р О В Е Р К А   «ЭТО КОД ЛИ?»
+#                       SEARCH ENGINE
 # ============================================================
 
-def is_exact_code(q: str) -> bool:
+def search_exact(df_: pd.DataFrame, q: str) -> List[int]:
     """
-    Для строгого поиска — если запрос «похоже на код».
-    Нормализуем и проверяем длину.
+    1) Точное совпадение по КОДУ (norm_code)
+    2) Если нет — точное совпадение по ПАРТ НОМЕРУ
+    3) Если нет — точное совпадение по OEM ПАРТ НОМЕРУ
+    Возвращает список индексов строк.
     """
-    nq = norm_code(q)
-    return len(nq) >= 4  # оптимально для UZCSS00xxx / болтов / подшипников
-
-
-# ============================================================
-#       С Т Р О Г И Й   П О И С К  (код → парт → OEM)
-# ============================================================
-
-def strict_code_lookup(q: str) -> List[int]:
-    """
-    1) точное совпадение по 'код'
-    2) если нет → точное по 'парт номер'
-    3) если нет → точное по 'oem парт номер'
-    """
-    ensure_fresh_data()
-    nq = norm_code(q)
-    if not nq:
+    key = norm_code(q)
+    if not key:
         return []
 
     hits = []
 
-    # ----- 1) поиск по код -----
-    if "код" in df.columns:
-        mask = df["код"].apply(lambda x: norm_code(x) == nq)
-        hits = df.index[mask].tolist()
-        if hits:
-            return hits
+    # --- 1) код ---
+    if "код" in df_.columns:
+        for i, row in df_.iterrows():
+            if norm_code(row.get("код", "")) == key:
+                hits.append(i)
 
-    # ----- 2) поиск по парт номер -----
-    if "парт номер" in df.columns:
-        mask = df["парт номер"].apply(lambda x: norm_code(x) == nq)
-        hits = df.index[mask].tolist()
-        if hits:
-            return hits
+    if hits:
+        return hits
 
-    # ----- 3) поиск по OEM парт номер -----
-    if "oem парт номер" in df.columns:
-        mask = df["oem парт номер"].apply(lambda x: norm_code(x) == nq)
-        hits = df.index[mask].tolist()
-        if hits:
-            return hits
+    # --- 2) парт номер ---
+    if "парт номер" in df_.columns:
+        for i, row in df_.iterrows():
+            if norm_code(row.get("парт номер", "")) == key:
+                hits.append(i)
 
-    return []
+    if hits:
+        return hits
 
-
-# ============================================================
-#       И Н Д Е К С Н Ы Й   П О И С К  (по SEARCH_COLUMNS)
-# ============================================================
-
-def index_lookup(q: str) -> Set[int]:
-    ensure_fresh_data()
-    keys = [norm_code(t) for t in tokenize(q)]
-    hits: Set[int] = set()
-
-    for k in keys:
-        hits |= _search_index.get(k, set())
+    # --- 3) OEM парт номер ---
+    if "oem парт номер" in df_.columns:
+        for i, row in df_.iterrows():
+            if norm_code(row.get("oem парт номер", "")) == key:
+                hits.append(i)
 
     return hits
 
 
-# ============================================================
-#          F A L L B A C K  —  contains / squash match
-# ============================================================
+# ------------------------------------------------------------
+#              INDEX MATCH (AND → OR)
+# ------------------------------------------------------------
 
-def fallback_lookup(q: str) -> Set[int]:
+def search_index(tokens: List[str]) -> Set[int]:
+    """
+    Поиск по токенам через глобальный search_index.
+    Логика:
+    - если все токены есть в индексе: И (AND)
+    - если хотя бы один отсутствует: переходим на ИЛИ (OR)
+    """
     ensure_fresh_data()
 
-    qs = squash(q)
-    if not qs:
+    if not tokens:
         return set()
 
-    mask = pd.Series(False, index=df.index)
-    for col in SEARCH_COLUMNS:
-        if col not in df.columns:
-            continue
-        col_squash = df[col].astype(str).str.lower().str.replace(
-            r"[\W_]+", "", regex=True
-        )
-        mask |= col_squash.str.contains(qs, na=False)
+    normalized = [norm_code(t) for t in tokens if t]
+    normalized = [t for t in normalized if t]
 
-    return set(df.index[mask])
+    if not normalized:
+        return set()
+
+    # AND phase
+    sets = []
+    for t in normalized:
+        s = _search_index.get(t)
+        if not s:
+            sets = []
+            break
+        sets.append(s)
+
+    if sets:
+        result = sets[0].copy()
+        for s in sets[1:]:
+            result &= s
+        return result
+
+    # OR phase
+    result = set()
+    for t in normalized:
+        result |= _search_index.get(t, set())
+
+    return result
 
 
-# ============================================================
-#                R E L E V A N C E    S C O R E
-# ============================================================
+# ------------------------------------------------------------
+#          FALLBACK SEARCH (слабый поиск по всем текстам)
+# ------------------------------------------------------------
 
-def relevance_score(row: dict, query: str) -> float:
+def search_fallback(df_: pd.DataFrame, q: str) -> List[int]:
     """
-    Релевантность — комбинация:
-    • вхождения токенов
-    • начало строки
-    • совпадение squash
-    • точного соответствия кода
+    Очень слабый поиск:
+    - непрерывное вхождение q_squash в код, name, тип, oem
+    Используется только если index match ничего не дал.
     """
-    score = 0.0
-    q = norm_text(query)
-    qs = squash(query)
-    tkns = tokenize(query)
+    qsq = squash(q)
+    if not qsq:
+        return []
 
-    code = norm_text(row.get("код", ""))
-    name = norm_text(row.get("наименование", ""))
-    t = norm_text(row.get("тип", ""))
+    out = []
 
-    full = code + name + t
+    for i, row in df_.iterrows():
+        code = squash(row.get("код", ""))
+        name = squash(row.get("наименование", ""))
+        typ = squash(row.get("тип", ""))
+        oem = squash(row.get("oem", ""))
 
-    # Совпадение squash
-    if qs and qs in squash(full):
+        combined = code + name + typ + oem
+        if qsq in combined:
+            out.append(i)
+
+    return out
+
+
+# ------------------------------------------------------------
+#                        SCORING
+# ------------------------------------------------------------
+
+def relevance(row: dict, tokens: List[str], qsq: str) -> float:
+    """
+    Весовая модель:
+    - обнаружение токена в коде → 5
+    - в name → 3
+    - в типе → 2
+    - в OEM → 2
+    - +10 за непрерывное вхождение squash
+    - +100 за полное совпадение кода
+    """
+    tkns = [t.lower() for t in tokens if t.strip()]
+    if not tkns:
+        return 0.0
+
+    code = str(row.get("код", "")).lower()
+    name = str(row.get("наименование", "")).lower()
+    typ  = str(row.get("тип", "")).lower()
+    oem  = str(row.get("oem", "")).lower()
+
+    score = 0
+
+    for t in tkns:
+        if t in code: score += 5
+        if t in name: score += 3
+        if t in typ:  score += 2
+        if t in oem:  score += 2
+
+    # squash match
+    joined = squash(code + name + typ + oem)
+    if qsq and qsq in joined:
         score += 10
 
-    # Совпадение токенов
-    for tk in tkns:
-        if tk in code:
-            score += 5
-        if tk in name:
-            score += 3
-        if tk in t:
-            score += 2
-
-    # Начало кода
-    if code.startswith(norm_code(query)):
-        score += 20
-
-    # Точный код
-    if code == norm_code(query):
+    # exact code match
+    if norm_code(code) == norm_code(" ".join(tkns)):
         score += 100
 
     return score
-# ============================================================
-#          Ф И Н А Л Ь Н Ы Й   П О И С К  (как в боте)
-# ============================================================
 
-def search_rows(query: str) -> List[dict]:
+
+# ------------------------------------------------------------
+#               ОБЪЕДИНЁННЫЙ ПОИСК (главная функция)
+# ------------------------------------------------------------
+
+def search_rows(q: str) -> List[int]:
     """
-    Объединённый поиск:
-    1) строгий поиск по коду / парт / OEM
-    2) индексный поиск по SEARCH_COLUMNS
-    3) fallback (contains/squash)
-    4) сортировка по релевантности
+    Главная функция поиска как в боте:
+    1) exact match
+    2) index match (AND → OR)
+    3) fallback squash
+    4) сортировка по score
     """
     ensure_fresh_data()
 
-    q = (query or "").strip()
-    if not q:
+    if not q.strip():
         return []
 
-    # ---- 1) строгий поиск — как в Telegram-боте ----
-    strict_hits = strict_code_lookup(q)
-    if strict_hits:
-        return [df.loc[i].to_dict() for i in strict_hits]
+    tokens = q.split()
+    qsq = squash(q)
 
-    # ---- 2) индексный поиск ----
-    idx_hits = index_lookup(q)
+    # 1) Точный поиск
+    exact = search_exact(df, q)
+    if exact:
+        return exact
 
-    # ---- 3) fallback ----
-    fallback_hits = fallback_lookup(q)
+    # 2) Поиск по индексу
+    idx_hits = list(search_index(tokens))
+    if idx_hits:
+        # сортировка по score
+        return sorted(idx_hits, key=lambda i: -relevance(df.loc[i], tokens, qsq))
 
-    # объединяем
-    all_hits = list(idx_hits | fallback_hits)
-    if not all_hits:
-        return []
+    # 3) fallback поиск
+    fb = search_fallback(df, q)
+    return fb
+# ============================================================
+#                       IMAGE RESOLUTION
+# ============================================================
 
-    # ---- сортировка по relevance ----
-    rows = [(i, df.loc[i].to_dict()) for i in all_hits]
+async def find_image_by_code_async(code: str) -> str:
+    """
+    Ищет ссылку на фото строго по КОДУ:
+    1) По image_index (построено по filename tokens)
+    2) Полный перебор image-столбца, ищем код в названии файла
+    """
+    ensure_fresh_data()
 
-    rows_sorted = sorted(
-        rows,
-        key=lambda x: relevance_score(x[1], q),
-        reverse=True
+    if not code:
+        return ""
+
+    key = norm_code(code)
+    if not key:
+        return ""
+
+    # 1) индекс
+    url = _image_index.get(key)
+    if url:
+        return url
+
+    # 2) fallback
+    if df is not None and "image" in df.columns:
+        for raw_url in df["image"]:
+            u = str(raw_url or "").strip()
+            if not u:
+                continue
+
+            tokens = url_name_tokens(u)
+            joined = "".join(tokens)
+
+            if key in tokens or key in joined:
+                return u
+
+    logger.info(f"[image] not found for code={key}")
+    return ""
+
+
+# -------------------------------------------------------------------
+# Google Drive → direct URL
+# -------------------------------------------------------------------
+
+def normalize_drive_url(url: str) -> str:
+    m = re.search(
+        r"drive\.google\.com/(?:file/d/([-\w]{20,})|open\?id=([-\w]{20,}))",
+        str(url or "")
     )
+    if not m:
+        return url
 
-    return [r for _, r in rows_sorted]
+    file_id = m.group(1) or m.group(2)
+    return f"https://drive.google.com/uc?export=download&id={file_id}"
+
+
+# -------------------------------------------------------------------
+# iBB.co → direct image resolver
+# -------------------------------------------------------------------
+
+async def resolve_ibb_direct_async(url: str) -> str:
+    """
+    Если ссылка ibb.co — достаём прямой og:image URL.
+    """
+    try:
+        if re.search(r"^https?://i\.ibb\.co/", url, re.I):
+            return url
+
+        if not re.search(r"^https?://ibb\.co/", url, re.I):
+            return url
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=10) as r:
+                if r.status != 200:
+                    return url
+                html = await r.text()
+
+        m = re.search(
+            r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)',
+            html, re.I
+        )
+        return m.group(1) if m else url
+
+    except Exception as e:
+        logger.warning(f"resolve_ibb_direct_async error: {e}")
+        return url
+
+
+async def resolve_image_url_async(url_raw: str) -> str:
+    if not url_raw:
+        return ""
+
+    url = normalize_drive_url(url_raw)
+    url = await resolve_ibb_direct_async(url)
+    return url
 
 
 # ============================================================
-#             П У Б Л И Ч Н Ы Е   Ф У Н К Ц И И
+#                        EXPORT
 # ============================================================
 
-async def get_public_item(row: dict) -> dict:
-    """
-    Собирает результат для Mini-App:
-    • строка
-    • картинка (find_image_by_code)
-    • text (format_row)
-    """
-    code = str(row.get("код", "")).strip()
-    image_url = ""
-
-    if code:
-        try:
-            image_url = await find_image_by_code_async(code)
-        except Exception:
-            image_url = ""
-
-    return {
-        **row,
-        "image_url": image_url,
-        "text": format_row(row)
-    }
+def df_to_xlsx(df_: pd.DataFrame) -> io.BytesIO:
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
+        df_.to_excel(writer, index=False)
+    buf.seek(0)
+    return buf
 
 
-async def public_search(query: str) -> List[dict]:
-    """
-    API, используемое webapp API.
-    """
-    rows = search_rows(query)
+# ============================================================
+#                  USERS / PERMISSIONS
+# ============================================================
+
+def parse_int(x) -> Optional[int]:
+    try:
+        v = int(str(x).strip())
+        return v if v > 0 else None
+    except Exception:
+        return None
+
+
+def normalize_header(h: str, idx: int) -> str:
+    h = (h or "").strip().lower()
+    h = re.sub(r"[^\w]+", "_", h).strip("_")
+    return h or f"col{idx+1}"
+
+
+def dedupe_headers(headers: List[str]) -> List[str]:
     out = []
-    for r in rows:
-        out.append(await get_public_item(r))
+    seen = {}
+    for i, h in enumerate(headers):
+        base = normalize_header(h, i)
+        if base not in seen:
+            seen[base] = 1
+            out.append(base)
+        else:
+            seen[base] += 1
+            out.append(f"{base}_{seen[base]}")
     return out
 
 
-async def public_get_by_code(code: str) -> Optional[dict]:
+def load_users_from_sheet() -> Tuple[Set[int], Set[int], Set[int]]:
     """
-    Детальная карточка по коду.
+    Возвращает три множества:
+    1) allowed
+    2) admins
+    3) blocked
     """
-    ensure_fresh_data()
-    if "код" not in df.columns:
-        return None
-
-    norm = norm_code(code)
-    if not norm:
-        return None
-
-    hits = df[df["код"].apply(lambda x: norm_code(x) == norm)]
-    if hits.empty:
-        return None
-
-    row = hits.iloc[0].to_dict()
-    return await get_public_item(row)
-
-
-# ============================================================
-#                  E X P O R T (xlsx)
-# ============================================================
-
-def export_df_to_xlsx() -> io.BytesIO:
-    return _df_to_xlsx(df)
-
-
-# ============================================================
-#          П О Л Ь З О В А Т Е Л И   (allowed/admin/block)
-# ============================================================
-
-def load_users_from_sheet():
-    """
-    Полная логика работает так же, как в Telegram-боте.
-    """
-    global SHEET_ALLOWED, SHEET_ADMINS, SHEET_BLOCKED
+    allowed = set()
+    admins = set()
+    blocked = set()
 
     try:
         client = get_gs_client()
         sh = client.open_by_url(SPREADSHEET_URL)
         ws = sh.worksheet(USERS_SHEET_NAME)
     except Exception:
-        logger.warning("Лист USERS не найден → доступ открыт всем по умолчанию")
-        return set(), set(), set()
+        logger.info("No users sheet — allow all")
+        return allowed, admins, blocked
 
-    data = ws.get_all_values()
-    if not data:
-        return set(), set(), set()
+    vals = ws.get_all_values()
+    if not vals:
+        return allowed, admins, blocked
 
-    headers = data[0]
-    rows = data[1:]
+    headers = dedupe_headers(vals[0])
+    rows = vals[1:]
 
-    dfu = pd.DataFrame(rows, columns=[h.strip().lower() for h in headers])
+    recs = []
+    for r in rows:
+        recs.append({
+            headers[i]: (r[i] if i < len(r) else "")
+            for i in range(len(headers))
+        })
 
-    allowed = set()
-    admins = set()
-    blocked = set()
+    d = pd.DataFrame(recs)
+    d.columns = [c.strip().lower() for c in d.columns]
 
     def truth(v):
-        return str(v).strip().lower() in ("1", "yes", "да", "true")
+        s = str(v).strip().lower()
+        return s in ("1", "yes", "да", "true", "y")
 
-    for _, r in dfu.iterrows():
-        uid = r.get("id") or r.get("user_id") or ""
-        try:
-            uid = int(str(uid).strip())
-        except:
+    for _, r in d.iterrows():
+        uid = parse_int(r.get("user_id") or r.get("uid") or r.get("id"))
+        if not uid:
             continue
 
-        if truth(r.get("blocked", "")):
+        # Ролевой режим
+        if "role" in d.columns:
+            role = str(r.get("role", "")).strip().lower()
+            if role in ("admin", "админ"):
+                admins.add(uid)
+                allowed.add(uid)
+            elif role in ("blocked", "ban", "заблокирован"):
+                blocked.add(uid)
+            else:
+                allowed.add(uid)
+            continue
+
+        # Колонки allowed/admin/blocked
+        if "blocked" in d.columns and truth(r.get("blocked")):
             blocked.add(uid)
             continue
-        if truth(r.get("admin", "")):
+
+        if "admin" in d.columns and truth(r.get("admin")):
             admins.add(uid)
             allowed.add(uid)
             continue
-        if truth(r.get("allowed", "")):
+
+        if "allowed" in d.columns and truth(r.get("allowed")):
             allowed.add(uid)
             continue
 
-        # по умолчанию
         allowed.add(uid)
 
     return allowed, admins, blocked
 
 
 # ============================================================
-#                 INITIAL LOAD  (sync/async)
+#                     INITIAL LOAD
 # ============================================================
 
 def initial_load():
-    """
-    Запускается в main.py при старте сервера.
-    """
-    ensure_fresh_data(force=True)
-
-    try:
-        allowed, admins, blocked = load_users_from_sheet()
-        SHEET_ALLOWED.clear(); SHEET_ALLOWED.update(allowed)
-        SHEET_ADMINS.clear(); SHEET_ADMINS.update(admins)
-        SHEET_BLOCKED.clear(); SHEET_BLOCKED.update(blocked)
-    except Exception as e:
-        logger.warning(f"initial_load: ошибка загрузки пользователей: {e}")
-
-
-async def initial_load_async():
-    import asyncio
-    await asyncio.to_thread(ensure_fresh_data, True)
-    allowed, admins, blocked = await asyncio.to_thread(load_users_from_sheet)
-
-    SHEET_ALLOWED.clear(); SHEET_ALLOWED.update(allowed)
-    SHEET_ADMINS.clear(); SHEET_ADMINS.update(admins)
-    SHEET_BLOCKED.clear(); SHEET_BLOCKED.update(blocked)
-# ============================================================
-#          Ф И Н А Л Ь Н Ы Й   П О И С К  (как в боте)
-# ============================================================
-
-def search_rows(query: str) -> List[dict]:
-    """
-    Объединённый поиск:
-    1) строгий поиск по коду / парт / OEM
-    2) индексный поиск по SEARCH_COLUMNS
-    3) fallback (contains/squash)
-    4) сортировка по релевантности
-    """
-    ensure_fresh_data()
-
-    q = (query or "").strip()
-    if not q:
-        return []
-
-    # ---- 1) строгий поиск — как в Telegram-боте ----
-    strict_hits = strict_code_lookup(q)
-    if strict_hits:
-        return [df.loc[i].to_dict() for i in strict_hits]
-
-    # ---- 2) индексный поиск ----
-    idx_hits = index_lookup(q)
-
-    # ---- 3) fallback ----
-    fallback_hits = fallback_lookup(q)
-
-    # объединяем
-    all_hits = list(idx_hits | fallback_hits)
-    if not all_hits:
-        return []
-
-    # ---- сортировка по relevance ----
-    rows = [(i, df.loc[i].to_dict()) for i in all_hits]
-
-    rows_sorted = sorted(
-        rows,
-        key=lambda x: relevance_score(x[1], q),
-        reverse=True
-    )
-
-    return [r for _, r in rows_sorted]
-
-
-# ============================================================
-#             П У Б Л И Ч Н Ы Е   Ф У Н К Ц И И
-# ============================================================
-
-async def get_public_item(row: dict) -> dict:
-    """
-    Собирает результат для Mini-App:
-    • строка
-    • картинка (find_image_by_code)
-    • text (format_row)
-    """
-    code = str(row.get("код", "")).strip()
-    image_url = ""
-
-    if code:
-        try:
-            image_url = await find_image_by_code_async(code)
-        except Exception:
-            image_url = ""
-
-    return {
-        **row,
-        "image_url": image_url,
-        "text": format_row(row)
-    }
-
-
-async def public_search(query: str) -> List[dict]:
-    """
-    API, используемое webapp API.
-    """
-    rows = search_rows(query)
-    out = []
-    for r in rows:
-        out.append(await get_public_item(r))
-    return out
-
-
-async def public_get_by_code(code: str) -> Optional[dict]:
-    """
-    Детальная карточка по коду.
-    """
-    ensure_fresh_data()
-    if "код" not in df.columns:
-        return None
-
-    norm = norm_code(code)
-    if not norm:
-        return None
-
-    hits = df[df["код"].apply(lambda x: norm_code(x) == norm)]
-    if hits.empty:
-        return None
-
-    row = hits.iloc[0].to_dict()
-    return await get_public_item(row)
-
-
-# ============================================================
-#                  E X P O R T (xlsx)
-# ============================================================
-
-def export_df_to_xlsx() -> io.BytesIO:
-    return _df_to_xlsx(df)
-
-
-# ============================================================
-#          П О Л Ь З О В А Т Е Л И   (allowed/admin/block)
-# ============================================================
-
-def load_users_from_sheet():
-    """
-    Полная логика работает так же, как в Telegram-боте.
-    """
+    """Синхронная загрузка (для старта бота)."""
     global SHEET_ALLOWED, SHEET_ADMINS, SHEET_BLOCKED
 
     try:
-        client = get_gs_client()
-        sh = client.open_by_url(SPREADSHEET_URL)
-        ws = sh.worksheet(USERS_SHEET_NAME)
-    except Exception:
-        logger.warning("Лист USERS не найден → доступ открыт всем по умолчанию")
-        return set(), set(), set()
-
-    data = ws.get_all_values()
-    if not data:
-        return set(), set(), set()
-
-    headers = data[0]
-    rows = data[1:]
-
-    dfu = pd.DataFrame(rows, columns=[h.strip().lower() for h in headers])
-
-    allowed = set()
-    admins = set()
-    blocked = set()
-
-    def truth(v):
-        return str(v).strip().lower() in ("1", "yes", "да", "true")
-
-    for _, r in dfu.iterrows():
-        uid = r.get("id") or r.get("user_id") or ""
-        try:
-            uid = int(str(uid).strip())
-        except:
-            continue
-
-        if truth(r.get("blocked", "")):
-            blocked.add(uid)
-            continue
-        if truth(r.get("admin", "")):
-            admins.add(uid)
-            allowed.add(uid)
-            continue
-        if truth(r.get("allowed", "")):
-            allowed.add(uid)
-            continue
-
-        # по умолчанию
-        allowed.add(uid)
-
-    return allowed, admins, blocked
-
-
-# ============================================================
-#                 INITIAL LOAD  (sync/async)
-# ============================================================
-
-def initial_load():
-    """
-    Запускается в main.py при старте сервера.
-    """
-    ensure_fresh_data(force=True)
+        ensure_fresh_data(force=True)
+    except Exception as e:
+        logger.exception("initial_load: failed to load sheet")
+        raise
 
     try:
         allowed, admins, blocked = load_users_from_sheet()
-        SHEET_ALLOWED.clear(); SHEET_ALLOWED.update(allowed)
-        SHEET_ADMINS.clear(); SHEET_ADMINS.update(admins)
-        SHEET_BLOCKED.clear(); SHEET_BLOCKED.update(blocked)
+        SHEET_ALLOWED = set(allowed)
+        SHEET_ADMINS = set(admins)
+        SHEET_BLOCKED = set(blocked)
     except Exception as e:
-        logger.warning(f"initial_load: ошибка загрузки пользователей: {e}")
+        logger.warning(f"initial_load: user sheet failed: {e}")
+
+
+import asyncio
+
+async def asyncio_to_thread(func, *args, **kwargs):
+    """Асинхронный вызов синхронной функции."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None, lambda: func(*args, **kwargs)
+    )
 
 
 async def initial_load_async():
-    import asyncio
-    await asyncio.to_thread(ensure_fresh_data, True)
-    allowed, admins, blocked = await asyncio.to_thread(load_users_from_sheet)
+    """Асинхронная загрузка (для web-app)."""
+    global SHEET_ALLOWED, SHEET_ADMINS, SHEET_BLOCKED
 
-    SHEET_ALLOWED.clear(); SHEET_ALLOWED.update(allowed)
-    SHEET_ADMINS.clear(); SHEET_ADMINS.update(admins)
-    SHEET_BLOCKED.clear(); SHEET_BLOCKED.update(blocked)
+    try:
+        await asyncio_to_thread(ensure_fresh_data, True)
+    except Exception as e:
+        logger.exception("initial_load_async: failed to load sheet")
+        raise
+
+    try:
+        allowed, admins, blocked = await asyncio_to_thread(
+            load_users_from_sheet
+        )
+        SHEET_ALLOWED = set(allowed)
+        SHEET_ADMINS = set(admins)
+        SHEET_BLOCKED = set(blocked)
+
+    except Exception as e:
+        logger.warning(f"initial_load_async: user sheet failed: {e}")
 
