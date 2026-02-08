@@ -59,22 +59,14 @@ ASK_QUANTITY, ASK_COMMENT, ASK_CONFIRM = range(3)
 
 # ---------- Утилиты ----------
 def norm_code(val: str) -> str:
-    """
-    Унификация кодов:
-    - нижний регистр
-    - O → 0
-    - убрать всё кроме a-z0-9
-    """
     s = str(val or "").strip().lower()
     s = s.replace("o", "0")
     return re.sub(r"[^a-z0-9]", "", s)
 
 def normalize(text: str) -> str:
-    """Нормализация для поисковых токенов"""
     return re.sub(r"[^\w\s]", "", str(text or "").lower()).strip()
 
 def squash(text: str) -> str:
-    """Уплотнённая строка для поиска"""
     return re.sub(r"[^a-z0-9]", "", str(text or "").lower())
 
 def now_local_str(tz_name: str = "Asia/Tashkent") -> str:
@@ -181,9 +173,6 @@ def build_search_index(df_: pd.DataFrame) -> Dict[str, Set[int]]:
     return idx
 
 def build_image_index(df_: pd.DataFrame) -> Dict[str, str]:
-    """
-    Жёсткая логика: из колонки image извлекаем код и сопоставляем.
-    """
     index: Dict[str, str] = {}
 
     if "image" not in df_.columns:
@@ -202,29 +191,40 @@ def build_image_index(df_: pd.DataFrame) -> Dict[str, str]:
 
     return index
 
-def ensure_fresh_data(force: bool = False):
-    global df, _search_index, _image_index, _last_load_ts
+def relevance_score(row: dict, tokens: list[str], q_squash: str) -> float:
+    parts = [
+        str(row.get("код", "")).lower(),
+        str(row.get("наименование", "")).lower(),
+        str(row.get("тип", "")).lower(),
+        str(row.get("парт номер", "")).lower(),
+        str(row.get("oem парт номер", "")).lower(),
+    ]
+    text = " ".join(parts)
+    norm_text = squash(text)
 
-    need = force or df is None or (time.time() - _last_load_ts > DATA_TTL)
-    if not need:
-        return
+    score = 0
+    for token in tokens:
+        if token in text:
+            score += 1
+        if token in norm_text:
+            score += 0.5
 
-    logger.info("📥 Обновление SAP-данных из Google Sheets...")
+    if q_squash in norm_text:
+        score += 2
 
-    df = _load_sap_dataframe()
-    _search_index = build_search_index(df)
-    _image_index = build_image_index(df)
+    return score
 
-    logger.info(f"✅ Загружено {len(df)} строк, индексов: search={len(_search_index)}, images={len(_image_index)}")
-
-    _last_load_ts = time.time()
+# ---------- Async helper ----------
+import asyncio
+async def asyncio_to_thread(func, *args, **kwargs):
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
 
 # ---------- Поиск ----------
 def match_row_by_index(tokens: List[str]) -> Set[int]:
     ensure_fresh_data()
 
     out: Set[int] = set()
-
     for t in tokens:
         tt = norm_code(t)
         if not tt:
@@ -232,21 +232,17 @@ def match_row_by_index(tokens: List[str]) -> Set[int]:
         found = _search_index.get(tt)
         if found:
             out |= found
-
     return out
 
 # ---------- Изображение ----------
 async def find_image_by_code_async(code: str) -> str:
     ensure_fresh_data()
-
     key = norm_code(code)
     if not key:
         return ""
-
     hit = _image_index.get(key)
     if hit:
         return hit
-
     try:
         for url in df["image"]:
             u = str(url or "")
@@ -255,7 +251,6 @@ async def find_image_by_code_async(code: str) -> str:
                 return u
     except Exception:
         pass
-
     logger.info(f"[image] нет изображения для кода {key}")
     return ""
 
@@ -305,28 +300,31 @@ def load_users_from_sheet():
 
     return allowed, admins, blocked
 
-# ---------- Async helper ----------
-import asyncio
-async def asyncio_to_thread(func, *args, **kwargs):
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
-
 # ---------- Initial load ----------
+def ensure_fresh_data(force: bool = False):
+    global df, _search_index, _image_index, _last_load_ts
+    need = force or df is None or (time.time() - _last_load_ts > DATA_TTL)
+    if not need:
+        return
+    logger.info("📥 Обновление SAP-данных из Google Sheets...")
+    df = _load_sap_dataframe()
+    _search_index = build_search_index(df)
+    _image_index = build_image_index(df)
+    logger.info(f"✅ Загружено {len(df)} строк, индексов: search={len(_search_index)}, images={len(_image_index)}")
+    _last_load_ts = time.time()
+
 def initial_load():
     ensure_fresh_data(force=True)
-
     allowed, admins, blocked = load_users_from_sheet()
-
     SHEET_ALLOWED.clear(); SHEET_ALLOWED.update(allowed)
     SHEET_ADMINS.clear(); SHEET_ADMINS.update(admins)
     SHEET_BLOCKED.clear(); SHEET_BLOCKED.update(blocked)
 
 async def initial_load_async():
     await asyncio_to_thread(ensure_fresh_data, True)
-
     allowed, admins, blocked = await asyncio_to_thread(load_users_from_sheet)
-
     SHEET_ALLOWED.clear(); SHEET_ALLOWED.update(allowed)
     SHEET_ADMINS.clear(); SHEET_ADMINS.update(admins)
     SHEET_BLOCKED.clear(); SHEET_BLOCKED.update(blocked)
+
 
