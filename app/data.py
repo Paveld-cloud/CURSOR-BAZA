@@ -81,7 +81,8 @@ def norm_code(val: str) -> str:
     s = str(val or "").strip().lower()
     s = s.replace("o", "0")
     return re.sub(r"[^a-z0-9]", "", s)
-
+ # ---- Совместимость с webapp.py ----
+_norm_code = norm_code
 
 def norm_text(val: str) -> str:
     """Упрощённая нормализация."""
