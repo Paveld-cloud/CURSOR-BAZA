@@ -1,166 +1,159 @@
 import logging
-import json
-import aiohttp
+from pathlib import Path
 from aiohttp import web
-from urllib.parse import parse_qs
 
-from app import data
+import app.data as data
 
 logger = logging.getLogger("bot.webapp")
 
-
-# ======================================================
-#  UTILS
-# ======================================================
-
-def ok(data_dict=None):
-    return web.json_response({"ok": True, **(data_dict or {})})
-
-def err(msg):
-    return web.json_response({"ok": False, "error": msg})
+BASE_DIR = Path(__file__).resolve().parent
+WEB_DIR = BASE_DIR / "web"
+STATIC_DIR = WEB_DIR / "static"
 
 
-# ======================================================
-#  HTML / STATIC
-# ======================================================
-
-async def index(request):
-    raise web.HTTPFound("/app")
-
-
-async def static_app(request):
-    return web.FileResponse("./app/static/app.html")
-
-
-async def static_item(request):
-    return web.FileResponse("./app/static/item.html")
-
-
-# ======================================================
-#  API SEARCH
-# ======================================================
+# ---------------------------------------------------------
+#  ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+# ---------------------------------------------------------
 
 def _search_rows(q: str):
-    """Логика поиска — идентична боту."""
-    q = q.strip()
+    """
+    Поиск — идентичен боту.
+    """
+    q = (q or "").strip()
     if not q:
         return []
 
-    # нормализация для поиска
+    # нормализация как в боте
     tokens = data.normalize(q).split()
     q_squash = data.squash(q)
     norm_code = data.norm_code(q)
 
-    # загружаем свежую БД
     data.ensure_fresh_data()
-
     df = data.df
     if df is None or df.empty:
         return []
 
-    hits = set()
+    matched = set()
 
-    # 1) точное совпадение кода (приоритет)
+    # 1) точное совпадение кода
     if norm_code:
         for i, row in df.iterrows():
             if data.norm_code(row.get("код", "")) == norm_code:
-                hits.add(i)
+                matched.add(i)
 
-    # 2) парсинг токенов через индекс
+    # 2) индексный матч по токенам
     if tokens:
-        idx_hits = data.match_row_by_index(tokens)
-        hits |= idx_hits
+        matched |= data.match_row_by_index(tokens)
 
-    if not hits:
+    if not matched:
         return []
 
-    # сортировка по relevancy
+    # сортировка по релевантности — как в боте
     scored = []
-    for i in hits:
+    for i in matched:
         row = df.iloc[i].to_dict()
         score = data.relevance_score(row, tokens, q_squash)
         scored.append((score, row))
 
     scored.sort(key=lambda x: x[0], reverse=True)
 
-    # готовим список
+    # добавляем image_url (пока raw — Mini-App сам прогрузит)
     out = []
     for _, row in scored:
-        # ищем корректную картинку
-        code = row.get("код", "")
-        img = row.get("image", "")
-        # асинхронное разрешение в later stage
-        out.append({
-            **row,
-            "image_url": img,
-        })
+        item = dict(row)
+        item["image_url"] = item.get("image", "")
+        out.append(item)
 
     return out
 
 
-async def api_search(request):
-    """GET /app/api/search?q=..."""
-    try:
-        q = request.rel_url.query.get("q", "").strip()
-        user_id = request.rel_url.query.get("uid", "0")
+# ---------------------------------------------------------
+#  PAGES
+# ---------------------------------------------------------
 
-        rows = _search_rows(q)
+async def page_index(request):
+    return web.FileResponse(WEB_DIR / "index.html")
+
+async def page_item(request):
+    return web.FileResponse(WEB_DIR / "item.html")
+
+async def page_ui_demo(request):
+    return web.FileResponse(WEB_DIR / "ui-demo.html")
+
+
+# ---------------------------------------------------------
+#  API
+# ---------------------------------------------------------
+
+async def api_search(request: web.Request):
+    try:
+        q = request.query.get("q", "")
+        user_id = request.query.get("user_id", "0")
+
+        items = _search_rows(q)
 
         return web.json_response({
             "ok": True,
             "q": q,
             "user_id": user_id,
-            "count": len(rows),
-            "items": rows,
+            "count": len(items),
+            "items": items
         })
-
     except Exception as e:
         logger.exception("api_search failed")
-        return web.json_response({"ok": False, "error": "search-failed"})
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
 
 
-# ======================================================
-#  API ITEM (детальная карточка)
-# ======================================================
-
-async def api_item(request):
-    """GET /app/api/item?code=..."""
+async def api_item(request: web.Request):
     try:
-        code = request.rel_url.query.get("code", "").strip()
-        data.ensure_fresh_data()
+        code = request.query.get("code", "").strip()
+        if not code:
+            return web.json_response({"ok": False, "error": "code required"}, status=400)
 
+        data.ensure_fresh_data()
         df = data.df
-        if df is None or df.empty:
-            return err("empty-db")
 
         norm = data.norm_code(code)
+        hit = df[df["код"].astype(str).str.lower().apply(data.norm_code) == norm]
 
-        for _, row in df.iterrows():
-            if data.norm_code(row.get("код", "")) == norm:
-                row = row.to_dict()
-                return ok({"item": row})
+        if hit.empty:
+            return web.json_response({"ok": False, "error": "not found"}, status=404)
 
-        return err("not-found")
+        row = hit.iloc[0].to_dict()
+        row["image_url"] = row.get("image", "")
 
+        return web.json_response({"ok": True, "item": row})
     except Exception as e:
         logger.exception("api_item failed")
-        return err("item-failed")
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
 
 
-# ======================================================
-#  REGISTER ROUTES
-# ======================================================
+# ---------------------------------------------------------
+#  BUILD WEB APP  ← НУЖНО MAIN.PY !!!
+# ---------------------------------------------------------
 
-def setup(app):
-    app.router.add_get("/", index)
+def build_web_app() -> web.Application:
+    app = web.Application()
 
-    # HTML страницы Mini-App
-    app.router.add_get("/app", static_app)
-    app.router.add_get("/item", static_item)
+    # Pages
+    app.router.add_get("/app", page_index)
+    app.router.add_get("/app/", page_index)
+    app.router.add_get("/app/item", page_item)
+    app.router.add_get("/app/ui-demo", page_ui_demo)
+
+    # Aliases
+    app.router.add_get("/", page_index)
+    app.router.add_get("/item", page_item)
+    app.router.add_get("/ui-demo", page_ui_demo)
 
     # API
     app.router.add_get("/app/api/search", api_search)
     app.router.add_get("/app/api/item", api_item)
 
-    # статика
-    app.router.add_static("/static/", path="./app/static", name="static")
+    # Static
+    app.router.add_static("/static/", str(STATIC_DIR), show_index=False)
+    app.router.add_static("/app/static/", str(STATIC_DIR), show_index=False)
+
+    logger.info("Mini App mounted with build_web_app()")
+    return app
+
