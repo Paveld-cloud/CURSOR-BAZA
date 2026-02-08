@@ -157,3 +157,4 @@ def build_web_app() -> web.Application:
     logger.info("Mini App mounted with build_web_app()")
     return app
 
+
