@@ -67,17 +67,24 @@ def more_markup():
 
 
 def main_menu_markup():
-    return InlineKeyboardMarkup(
+    """Улучшенное главное меню"""
+    return InlineKeyboardMarkup([
         [
-            # [InlineKeyboardButton("🔍 Поиск", callback_data="menu_search")],  # 🔕 убрали кнопку поиска
-            [
-                InlineKeyboardButton(
-                    "📦 Как списать деталь", callback_data="menu_issue_help"
-                )
-            ],
-            [InlineKeyboardButton("📞 Поддержка", callback_data="menu_contact")],
+            InlineKeyboardButton("🔍 Поиск", callback_data="menu_search"),
+            InlineKeyboardButton("📂 Категории", callback_data="menu_categories")
+        ],
+        [
+            InlineKeyboardButton("📜 История", callback_data="menu_history"),
+            InlineKeyboardButton("📊 Экспорт", callback_data="menu_export")
+        ],
+        [
+            InlineKeyboardButton("📦 Как списать", callback_data="menu_issue_help"),
+        ],
+        [
+            InlineKeyboardButton("ℹ️ Помощь", callback_data="menu_help"),
+            InlineKeyboardButton("📞 Поддержка", callback_data="menu_contact")
         ]
-    )
+    ])
 
 
 # ---------- Mini App ----------
@@ -179,18 +186,22 @@ async def send_welcome_sequence(update: Update, context: ContextTypes.DEFAULT_TY
     first = escape((user.first_name or "").strip() or "коллега")
 
     card_html = (
-        f"⚙️ <b>Привет, {first}!</b>\n\n"
-        f"Добро пожаловать в <b>бот для поиска деталей</b> 🛠️\n\n"
+        f"👋 <b>Привет, {first}!</b>\n\n"
+        f"Добро пожаловать в <b>систему поиска запчастей</b> 🛠️\n\n"
         f"━━━━━━━━━━━━━━━\n"
-        f"🔍 <b>Что умеет бот?</b>\n"
-        f"• Поиск по <code>названию</code>, <code>коду</code> или <code>модели</code>\n"
-        f"• Просмотр карточек с описанием и фото 📸\n"
-        f"• Списание деталей с подтверждением ✅\n"
-        f"• Экспорт результатов в Excel 📊\n\n"
+        f"✨ <b>Что я умею:</b>\n\n"
+        f"🔍 <b>Умный поиск</b>\n"
+        f"   • По названию, коду или парт номеру\n"
+        f"   • Быстрый доступ через категории\n"
+        f"   • Сохранение истории поиска\n\n"
+        f"📦 <b>Управление деталями</b>\n"
+        f"   • Просмотр карточек с фото\n"
+        f"   • Списание с подтверждением\n"
+        f"   • Экспорт результатов в Excel\n\n"
         f"━━━━━━━━━━━━━━━\n"
-        f"🧪 <b>Пример запроса по парт номеру:</b>\n"
+        f"🧪 <b>Пример запроса:</b>\n"
         f"<code>PI8808DRG500</code>\n\n"
-        f"🚀 <i>Готов к работе — просто начните вводить!</i>"
+        f"🚀 <i>Выберите действие из меню ниже!</i>"
     )
 
     try:
@@ -679,6 +690,15 @@ async def search_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not q:
         return await update.message.reply_text("Введите запрос.")
 
+    # Сохраняем запрос в историю
+    st = data.user_state.setdefault(uid, {})
+    history = st.setdefault("search_history", [])
+    if q not in history[-5:]:  # Избегаем дубликатов в последних 5
+        history.append(q)
+        if len(history) > 50:  # Ограничиваем размер истории
+            history = history[-50:]
+        st["search_history"] = history
+
     # Базовые токены и "склеенная" фраза
     tokens = data.normalize(q).split()
     q_squash = data.squash(q)
@@ -753,7 +773,6 @@ async def search_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         results_df = results_df.sort_values(by=["__score"], ascending=False)
     results_df = results_df.drop(columns="__score")
 
-    st = data.user_state.setdefault(uid, {})
     st["query"] = q
     st["results"] = results_df
     st["page"] = 0
@@ -977,6 +996,270 @@ async def on_more_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_page_via_bot(context.bot, chat_id, uid)
 
 
+# --------------------- НОВЫЕ ОБРАБОТЧИКИ ДЛЯ УЛУЧШЕННОГО ИНТЕРФЕЙСА -----------------
+
+async def menu_categories_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик кнопки Категории - показывает типы деталей"""
+    q = update.callback_query
+    await q.answer()
+    
+    # Получаем уникальные типы из базы
+    if data.df is None or data.df.empty:
+        return await q.message.edit_text(
+            "❌ База данных пуста",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Главное меню", callback_data="back_main")]
+            ])
+        )
+    
+    # Получаем топ-15 типов
+    if 'тип' not in data.df.columns:
+        return await q.message.edit_text(
+            "❌ Колонка 'тип' не найдена в базе",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Главное меню", callback_data="back_main")]
+            ])
+        )
+    
+    types = data.df['тип'].dropna().unique()
+    types = sorted([str(t).strip() for t in types if str(t).strip() and str(t).strip().lower() not in ['nan', 'none', '']])[:15]
+    
+    if not types:
+        return await q.message.edit_text(
+            "❌ Типы деталей не найдены",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Главное меню", callback_data="back_main")]
+            ])
+        )
+    
+    # Формируем кнопки по 2 в ряд
+    buttons = []
+    for i in range(0, len(types), 2):
+        row = []
+        for j in range(i, min(i + 2, len(types))):
+            item_type = types[j]
+            # Ограничиваем длину текста на кнопке
+            label = item_type if len(item_type) <= 20 else item_type[:17] + "..."
+            row.append(InlineKeyboardButton(
+                f"🔧 {label}",
+                callback_data=f"cat_type:{item_type[:50]}"
+            ))
+        buttons.append(row)
+    
+    buttons.append([InlineKeyboardButton("🔙 Главное меню", callback_data="back_main")])
+    
+    await q.message.edit_text(
+        "📂 <b>Выберите тип детали:</b>\n\n"
+        "Показаны наиболее популярные категории",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+
+async def cat_type_search_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Поиск по выбранному типу"""
+    q = update.callback_query
+    await q.answer("🔍 Ищу...")
+    
+    # Извлекаем тип из callback_data
+    try:
+        item_type = q.data.split(":", 1)[1]
+    except IndexError:
+        return await q.answer("❌ Ошибка", show_alert=True)
+    
+    uid = q.from_user.id
+    
+    # Выполняем поиск по типу
+    if data.df is None or data.df.empty:
+        return await q.message.edit_text("❌ База данных пуста")
+    
+    # Фильтруем по типу
+    mask = data.df['тип'].astype(str).str.contains(re.escape(item_type), case=False, na=False)
+    results = data.df[mask].copy()
+    
+    if results.empty:
+        return await q.message.edit_text(
+            f"❌ По категории <b>{escape(item_type)}</b> ничего не найдено",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Категории", callback_data="menu_categories")],
+                [InlineKeyboardButton("🏠 Главное меню", callback_data="back_main")]
+            ])
+        )
+    
+    # Сохраняем результаты
+    st = data.user_state.setdefault(uid, {})
+    st["results"] = results
+    st["query"] = f"Тип: {item_type}"
+    st["page"] = 0
+    
+    # Удаляем сообщение с меню
+    try:
+        await q.message.delete()
+    except Exception:
+        pass
+    
+    # Отправляем результаты через bot
+    await send_page_via_bot(context.bot, q.message.chat.id, uid)
+
+
+async def menu_favorites_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик кнопки Избранное"""
+    q = update.callback_query
+    await q.answer()
+    
+    await q.message.edit_text(
+        "⭐ <b>Избранное</b>\n\n"
+        "Функция в разработке...\n\n"
+        "Скоро здесь будут отображаться детали, которые вы добавите в избранное.",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔙 Главное меню", callback_data="back_main")]
+        ])
+    )
+
+
+async def menu_history_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик кнопки История поиска"""
+    q = update.callback_query
+    await q.answer()
+    
+    uid = q.from_user.id
+    st = data.user_state.get(uid, {})
+    history = st.get("search_history", [])
+    
+    if not history:
+        return await q.message.edit_text(
+            "📜 <b>История поиска</b>\n\n"
+            "История пока пуста. Выполните поиск, и он появится здесь!",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Главное меню", callback_data="back_main")]
+            ])
+        )
+    
+    # Показываем последние 10 запросов
+    recent = history[-10:]
+    history_text = "📜 <b>Последние запросы:</b>\n\n"
+    
+    buttons = []
+    for i, query in enumerate(reversed(recent), 1):
+        history_text += f"{i}. <code>{escape(query)}</code>\n"
+        if i <= 5:  # Добавляем кнопки только для первых 5
+            buttons.append([InlineKeyboardButton(
+                f"{i}. {query[:25]}..." if len(query) > 25 else f"{i}. {query}",
+                callback_data=f"hist_search:{i-1}"
+            )])
+    
+    buttons.append([InlineKeyboardButton("🔙 Главное меню", callback_data="back_main")])
+    
+    await q.message.edit_text(
+        history_text,
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+
+async def menu_export_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик кнопки Экспорт"""
+    q = update.callback_query
+    await q.answer()
+    
+    uid = q.from_user.id
+    st = data.user_state.get(uid, {})
+    results = st.get("results")
+    
+    if results is None or results.empty:
+        return await q.message.edit_text(
+            "📊 <b>Экспорт в Excel</b>\n\n"
+            "Сначала выполните поиск, чтобы экспортировать результаты!",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Главное меню", callback_data="back_main")]
+            ])
+        )
+    
+    await q.answer("📊 Готовлю файл...", show_alert=False)
+    
+    # Используем существующую функцию export
+    import datetime
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    try:
+        buf = await asyncio.to_thread(
+            data._df_to_xlsx, results, f"export_{timestamp}.xlsx"
+        )
+        await q.message.reply_document(
+            InputFile(buf, filename=f"export_{timestamp}.xlsx"),
+            caption=f"📊 <b>Экспорт результатов</b>\n\n"
+                    f"🔍 Запрос: <code>{escape(st.get('query', 'поиск'))}</code>\n"
+                    f"📦 Записей: <b>{len(results)}</b>",
+            parse_mode="HTML"
+        )
+        await q.message.delete()
+    except Exception as e:
+        logger.error(f"Export failed: {e}")
+        await q.message.edit_text(
+            f"❌ Ошибка при экспорте: {str(e)}\n\n"
+            "Попробуйте снова или обратитесь в поддержку.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Главное меню", callback_data="back_main")]
+            ])
+        )
+
+
+async def menu_help_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик кнопки Помощь"""
+    q = update.callback_query
+    await q.answer()
+    
+    help_text = (
+        "📖 <b>Справка по использованию</b>\n\n"
+        "🔍 <b>Поиск:</b>\n"
+        "   • Введите название, код или парт номер\n"
+        "   • Используйте категории для быстрого доступа\n"
+        "   • Просматривайте историю поиска\n\n"
+        "📦 <b>Списание:</b>\n"
+        "   1. Найдите деталь через поиск\n"
+        "   2. Нажмите «📦 Взять деталь»\n"
+        "   3. Укажите количество\n"
+        "   4. Добавьте комментарий\n"
+        "   5. Подтвердите операцию\n\n"
+        "⌨️ <b>Команды:</b>\n"
+        "   /start - Главное меню\n"
+        "   /help - Эта справка\n"
+        "   /export - Экспорт результатов\n"
+        "   /more - Показать ещё результатов\n"
+        "   /cancel - Отменить текущее действие\n\n"
+        "❓ <b>Нужна помощь?</b>\n"
+        f"   Напишите в поддержку: {SUPPORT_CONTACT}"
+    )
+    
+    await q.message.edit_text(
+        help_text,
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔙 Главное меню", callback_data="back_main")]
+        ])
+    )
+
+
+async def back_main_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Возврат в главное меню"""
+    q = update.callback_query
+    await q.answer()
+    
+    user = q.from_user
+    first = escape((user.first_name or "").strip() or "коллега")
+    
+    await q.message.edit_text(
+        f"🏠 <b>Привет, {first}!</b>\n\n"
+        "Выберите действие из меню ниже:",
+        parse_mode="HTML",
+        reply_markup=main_menu_markup()
+    )
+
+
 # --------------------- Регистрация хендлеров -----------------
 def register_handlers(app):
     # Гварды
@@ -1005,11 +1288,20 @@ def register_handlers(app):
 
     # Меню приветствия
     app.add_handler(CallbackQueryHandler(menu_search_cb, pattern=r"^menu_search$"))
+    app.add_handler(CallbackQueryHandler(menu_categories_cb, pattern=r"^menu_categories$"))
+    app.add_handler(CallbackQueryHandler(menu_favorites_cb, pattern=r"^menu_favorites$"))
+    app.add_handler(CallbackQueryHandler(menu_history_cb, pattern=r"^menu_history$"))
+    app.add_handler(CallbackQueryHandler(menu_export_cb, pattern=r"^menu_export$"))
+    app.add_handler(CallbackQueryHandler(menu_help_cb, pattern=r"^menu_help$"))
     app.add_handler(
         CallbackQueryHandler(menu_issue_help_cb, pattern=r"^menu_issue_help$")
     )
     app.add_handler(CallbackQueryHandler(menu_contact_cb, pattern=r"^menu_contact$"))
+    app.add_handler(CallbackQueryHandler(back_main_cb, pattern=r"^back_main$"))
     app.add_handler(CallbackQueryHandler(noop_cb, pattern=r"^noop$"))
+    
+    # Категории
+    app.add_handler(CallbackQueryHandler(cat_type_search_cb, pattern=r"^cat_type:"))
 
     # Пагинация и отмена
     app.add_handler(CallbackQueryHandler(on_more_click, pattern=r"^more$"))
